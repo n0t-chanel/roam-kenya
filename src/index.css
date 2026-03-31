@@ -1,0 +1,22 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:wght@300;400;600;700&family=Manrope:wght@300;400;500;600;700&display=swap");
+
+@import "tailwindcss";
+
+:root {
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* Force the body to allow fixed elements to sit on top */
+body {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #000;
+  display: block !important; /* This stops Vite from centering the whole app */
+}
+
+#root {
+  width: 100%;
+}
