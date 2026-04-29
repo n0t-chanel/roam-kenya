@@ -41,10 +41,4 @@ export const galleryItems = [
     title: "Group Of Friends Enjoying Our Rides",
     category:"Ride With Us "
   },
-   {
-    id:6,
-    image:HikingImg,
-    title: "Hikings ",
-
-  }
-];
+  ];

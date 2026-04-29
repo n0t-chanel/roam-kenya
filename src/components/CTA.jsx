@@ -6,7 +6,7 @@ export default function CTA() {
 
   const handlePartnerChat = () => {
     const phoneNumber = "254705416781";
-    const message = "Hello Roam Kenya, I am interested in partnering by adding my vehicle to your fleet.";
+    const message = "Hello Jamupet Transit Solutions, I am interested in partnering by adding my vehicle to your fleet.";
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
@@ -36,7 +36,7 @@ export default function CTA() {
             Own a Vehicle? 
           </h2>
           <p className="text-gray-400 mb-8 text-sm max-w-sm">
-            Join the Roam Kenya fleet. We manage your vehicle and connect you with premium corporate clients.
+            Join the Jamupet Transit Solutions. We manage your vehicle and connect you with premium corporate clients.
           </p>
           <div className="flex flex-col gap-4">
             <button 

@@ -14,7 +14,7 @@ export default function Footer() {
           {/* COLUMN 1: BRAND & VISION */}
           <div className="space-y-6">
             <h3 className="text-2xl font-bold tracking-tighter">
-              ROAM<span className="text-[#B35A38]">KENYA</span>
+              JAMUPET<span className="text-[#B35A38]">  TRANSIT SOLUTIONS</span>
             </h3>
             <p className="text-gray-400 text-sm leading-relaxed">
               Kenya’s premier personalized chauffeur and logistics partner. 
@@ -80,7 +80,7 @@ export default function Footer() {
 
         {/* BOTTOM BAR */}
         <div className="pt-12 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-6 text-[10px] uppercase tracking-[0.2em] text-gray-500 font-bold">
-          <p>© {currentYear} ROAM KENYA LTD. ALL RIGHTS RESERVED.</p>
+          <p>© {currentYear} JAMUPET TRANSIT SOLUTIONS. ALL RIGHTS RESERVED.</p>
           <div className="flex items-center gap-2">
             <span>Made with</span>
             <Heart size={10} className="text-[#B35A38] fill-[#B35A38]" />

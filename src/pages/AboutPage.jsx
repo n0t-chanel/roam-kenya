@@ -15,7 +15,7 @@ export default function AboutPage() {
 
   const handleDriverApplication = () => {
     const phoneNumber = "254705416781";
-    const message = "Hello Roam Kenya, I am interested in applying for a Professional Chauffeur position.";
+    const message = "Hello Jamupet Transit, I am interested in applying for a Professional Chauffeur position.";
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
@@ -46,7 +46,7 @@ export default function AboutPage() {
           <div className="space-y-6">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 leading-tight">Born in Nairobi,<br/>Serving the World.</h2>
             <p className="text-gray-500 text-sm md:text-base leading-relaxed font-light max-w-md">
-              Roam Kenya was founded on reliability. Luxury isn't just about the car; it's about the discipline of the person behind the wheel.
+              Jamupet Ttansit Solutions  was founded on reliability. Luxury isn't just about the car; it's about the discipline of the person behind the wheel.It's all about travelling with confidence.
             </p>
             
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4">

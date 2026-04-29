@@ -34,7 +34,7 @@ export default function Features() {
         
         <div className="text-center mb-10"> {/* Reduced mb-16 to mb-10 */}
           <span className="text-[#B35A38] font-bold tracking-[.3em] uppercase text-[10px]">The Chauffeur Difference</span>
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 italic">Why Choose Roam Kenya?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 italic">Why Choose Jamupet Transits?</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">

@@ -27,14 +27,14 @@ export default function BookingForm() {
     const phoneNumber = "254705416781"; 
     
     // Updated message to include the service category at the top
-    const message = `*NEW BOOKING INQUIRY*%0A%0A` +
-      (formData.serviceCategory ? `📌 *Service:* ${formData.serviceCategory}%0A` : "") +
-      `📍 *From:* ${formData.pickup}%0A` +
-      `🏁 *To:* ${formData.destination}%0A` +
-      `📅 *Date:* ${formData.date}%0A` +
-      `🕒 *Time:* ${formData.time}%0A` +
-      `👥 *Pax:* ${formData.passengers}%0A` +
-      `🚗 *Vehicle:* ${formData.vehicleType}`;
+    const message = `NEW BOOKING INQUIRY` +
+      (formData.serviceCategory ? `Service: ${formData.serviceCategory}` : "") +
+      ` From: ${formData.pickup}` +
+      ` To: ${formData.destination}` +
+      ` Date: ${formData.date}` +
+      `Time: ${formData.time}` +
+      ` Pax: ${formData.passengers}` +
+      `Vehicle: ${formData.vehicleType}`;
       
     window.open(`https://wa.me/${phoneNumber}?text=${message}`, "_blank");
   };
