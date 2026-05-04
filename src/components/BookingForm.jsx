@@ -1,18 +1,19 @@
 import React, { useState } from "react";
-import { useLocation } from "react-router-dom";
-import { Calendar, Clock, MapPin, Users, Car, ChevronRight, Info, Hourglass } from "lucide-react";
+import { useLocation } from "react-router-dom"; 
+import { Calendar, Clock, MapPin, Users, Car, ChevronRight, Info, Plane } from "lucide-react"; // <-- Added Plane icon
 import BackButton from "../components/BackButton";
 
 export default function BookingForm() {
-  const location = useLocation();
+  const location = useLocation(); 
 
   // Initialize state directly from location data if it exists
   const [formData, setFormData] = useState({
     pickup: location.state?.type === "Airport Transfer" ? location.state.location : "",
     destination: location.state?.type === "Hotel Transfer" ? location.state.location : "",
+    flightNumber: "", // <-- Added flight number state
     date: "",
     time: "",
-    hours: "Transfer Only", // <-- Added hours state
+    hours: "Transfer Only", 
     passengers: "1",
     vehicleType: "Executive Sedan",
     serviceCategory: location.state?.type || "" 
@@ -27,14 +28,15 @@ export default function BookingForm() {
     e.preventDefault();
     const phoneNumber = "254705416781"; 
     
-    // Updated message to include the Hours and formatted cleanly for WhatsApp
+    // Updated message to conditionally include the Flight Number if the user typed one in
     const message = `*NEW BOOKING INQUIRY*\n` +
       (formData.serviceCategory ? `*Service:* ${formData.serviceCategory}\n` : "") +
       `*From:* ${formData.pickup}\n` +
       `*To:* ${formData.destination}\n` +
+      (formData.flightNumber ? `*Flight Number:* ${formData.flightNumber}\n` : "") + // <-- Injects flight info
       `*Date:* ${formData.date}\n` +
       `*Time:* ${formData.time}\n` +
-      `*Duration:* ${formData.hours}\n` + // <-- Added to payload
+      `*Duration:* ${formData.hours}\n` + 
       `*Pax:* ${formData.passengers}\n` +
       `*Vehicle:* ${formData.vehicleType}`;
       
@@ -66,7 +68,7 @@ export default function BookingForm() {
 
           <form onSubmit={handleSubmit} className="p-10 md:p-16 space-y-10">
             
-            {/* SECTION 1: ROUTE */}
+            {/* SECTION 1: ROUTE & FLIGHT INFO */}
             <div className="space-y-6">
               <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900 border-b border-gray-100 pb-4 uppercase tracking-widest">
                 <MapPin size={18} className="text-[#B35A38]" /> 01. Route Details
@@ -97,6 +99,21 @@ export default function BookingForm() {
                   />
                 </div>
               </div>
+
+              {/* NEW: Optional Flight Number Field */}
+              <div className="group pt-2">
+                <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 mb-2 ml-2">
+                  <Plane size={12} className="text-[#C5A059]" /> Flight Number (Optional)
+                </label>
+                <input 
+                  name="flightNumber"
+                  value={formData.flightNumber}
+                  onChange={handleChange}
+                  type="text" 
+                  placeholder="e.g., KQ102 (We track your arrival)" 
+                  className="w-full md:w-1/2 p-5 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#C5A059] focus:bg-white transition-all outline-none text-gray-800 font-medium"
+                />
+              </div>
             </div>
 
             {/* SECTION 2: SCHEDULE & PAX */}
@@ -104,7 +121,6 @@ export default function BookingForm() {
               <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900 border-b border-gray-100 pb-4 uppercase tracking-widest">
                 <Calendar size={18} className="text-[#B35A38]" /> 02. Schedule & Duration
               </h4>
-              {/* Changed grid to 4 columns on large screens to fit the new Hours dropdown neatly */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
                   <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Date</label>
