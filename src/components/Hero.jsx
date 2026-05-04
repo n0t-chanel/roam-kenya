@@ -11,16 +11,21 @@ export default function Hero() {
       {/* BACKGROUND */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/hero1.png"
+          src="/hero1.webp"
           alt="Luxury Transit"
+          width="800" 
+          height="600" 
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
       </div>
 
       {/* MAIN CONTENT */}
-      <div className="relative z-20 max-w-[1440px] mx-auto h-full px-6 md:px-12 flex items-center">
-        <div className="max-w-4xl mb-24">
+      {/* ADDED: pt-32 and pb-56 on mobile to keep text out of the logo and bottom strip */}
+      <div className="relative z-20 max-w-[1440px] mx-auto h-full px-6 md:px-12 flex items-center pt-32 pb-56 md:pt-0 md:pb-0">
+        
+        {/* ADDED: Adjusted margins to center better on mobile */}
+        <div className="max-w-4xl mb-0 md:mb-24 mt-8 md:mt-0">
           
           {/* DYNAMIC TYPING TITLE */}
           <h1 className="text-white font-serif text-5xl md:text-[75px] leading-[1.1] mb-6 min-h-[120px] md:min-h-[180px]">
@@ -31,12 +36,11 @@ export default function Hero() {
                   strings: [
                     'Exceptional Service.',
                     'Airport Transfers.',
-                    'Hotel Transfers',
+                    'Hotel Transfers.',
                     'Executive Chauffeurs.',
                     'Safari Experiences.',
                     'Travel with Confidence.',
                     'Book Now.'
-
                   ],
                   autoStart: true,
                   loop: true,
