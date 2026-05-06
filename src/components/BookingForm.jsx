@@ -1,45 +1,172 @@
-import React, { useState } from "react";
-import { useLocation } from "react-router-dom"; 
-import { Calendar, Clock, MapPin, Users, Car, ChevronRight, Info, Plane } from "lucide-react"; // <-- Added Plane icon
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom"; 
+import { Calendar, Clock, MapPin, Users, Car, ChevronRight, Info, Plane, AlertCircle, CheckCircle, Loader } from "lucide-react";
 import BackButton from "../components/BackButton";
+import { useDatabase } from "../hooks/useDatabase";
+import { useFlightTracking } from "../hooks/useFlightTracking";
+import { useAuthContext } from "../context/AuthContext";
 
 export default function BookingForm() {
   const location = useLocation(); 
+  const navigate = useNavigate();
+  const { user } = useAuthContext();
+  
+  const bookingsDb = useDatabase('bookings');
+  const [bookingId, setBookingId] = useState(null);
+  const { trackFlight, flightBooking, getFlightStatus, loading: trackingLoading } = useFlightTracking(null, bookingId);
 
-  // Initialize state directly from location data if it exists
   const [formData, setFormData] = useState({
     pickup: location.state?.type === "Airport Transfer" ? location.state.location : "",
     destination: location.state?.type === "Hotel Transfer" ? location.state.location : "",
-    flightNumber: "", // <-- Added flight number state
+    flightNumber: "",
     date: "",
     time: "",
     hours: "Transfer Only", 
     passengers: "1",
     vehicleType: "Executive Sedan",
-    serviceCategory: location.state?.type || "" 
+    serviceCategory: location.state?.type || ""
   });
+
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState(null);
+  const [whatsappFallback, setWhatsappFallback] = useState(true);
+
+  // Validate form fields
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!formData.pickup.trim()) errors.pickup = "Pickup location is required";
+    if (!formData.destination.trim()) errors.destination = "Destination is required";
+    if (!formData.date) errors.date = "Date is required";
+    if (!formData.time) errors.time = "Time is required";
+    
+    // Validate date is not in past
+    const selectedDate = new Date(formData.date);
+    if (selectedDate < new Date()) {
+      errors.date = "Please select a future date";
+    }
+    
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors(prev => ({ ...prev, [name]: null }));
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const phoneNumber = "254705416781"; 
     
-    // Updated message to conditionally include the Flight Number if the user typed one in
+    if (!validateForm()) return;
+
+    if (!user) {
+      setSubmitStatus({ type: 'error', message: 'Please login to make a booking' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitStatus(null);
+
+    try {
+      const bookingPayload = {
+        user_id: user.id,
+        pickup_location: formData.pickup,
+        destination_location: formData.destination,
+        flight_number: formData.flightNumber || null,
+        booking_date: formData.date,
+        pickup_time: formData.time,
+        duration: formData.hours,
+        passengers: parseInt(formData.passengers),
+        vehicle_type: formData.vehicleType,
+        service_category: formData.serviceCategory,
+        status: 'pending',
+        notes: '',
+        total_price: null,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+
+      // Save booking to database
+      const savedBooking = await bookingsDb.insert([bookingPayload]);
+      
+      if (!savedBooking || savedBooking.length === 0) {
+        throw new Error('Failed to create booking');
+      }
+
+      const bid = savedBooking[0].id;
+      setBookingId(bid);
+
+      // If flight number provided, start tracking
+      if (formData.flightNumber.trim()) {
+        try {
+          await trackFlight(formData.flightNumber);
+          setSubmitStatus({
+            type: 'success',
+            message: `✅ Booking confirmed! Booking ID: ${bid}. Flight tracking active.`
+          });
+        } catch (trackErr) {
+          console.error('Flight tracking failed:', trackErr);
+          setSubmitStatus({
+            type: 'success',
+            message: `✅ Booking confirmed! Booking ID: ${bid}. (Flight tracking unavailable)`
+          });
+        }
+      } else {
+        setSubmitStatus({
+          type: 'success',
+          message: `✅ Booking confirmed! Booking ID: ${bid}`
+        });
+      }
+
+      // Send WhatsApp confirmation as backup
+      if (whatsappFallback) {
+        sendWhatsappConfirmation();
+      }
+
+      // Reset form after 2 seconds
+      setTimeout(() => {
+        setFormData({
+          pickup: "",
+          destination: "",
+          flightNumber: "",
+          date: "",
+          time: "",
+          hours: "Transfer Only",
+          passengers: "1",
+          vehicleType: "Executive Sedan",
+          serviceCategory: ""
+        });
+      }, 2000);
+
+    } catch (err) {
+      console.error('Booking error:', err);
+      setSubmitStatus({
+        type: 'error',
+        message: err.message || 'Failed to create booking. Please try again.'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const sendWhatsappConfirmation = () => {
+    const phoneNumber = "254705416781";
     const message = `*NEW BOOKING INQUIRY*\n` +
       (formData.serviceCategory ? `*Service:* ${formData.serviceCategory}\n` : "") +
       `*From:* ${formData.pickup}\n` +
       `*To:* ${formData.destination}\n` +
-      (formData.flightNumber ? `*Flight Number:* ${formData.flightNumber}\n` : "") + // <-- Injects flight info
+      (formData.flightNumber ? `*Flight Number:* ${formData.flightNumber}\n` : "") +
       `*Date:* ${formData.date}\n` +
       `*Time:* ${formData.time}\n` +
       `*Duration:* ${formData.hours}\n` + 
       `*Pax:* ${formData.passengers}\n` +
       `*Vehicle:* ${formData.vehicleType}`;
-      
+    
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
@@ -49,7 +176,7 @@ export default function BookingForm() {
         <BackButton />
         <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-hidden border border-gray-100">
           
-          {/* Header Section */}
+          {/* Header */}
           <div className="bg-[#1A1A1A] p-12 text-white relative overflow-hidden">
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-3">
@@ -66,9 +193,49 @@ export default function BookingForm() {
             <div className="absolute top-0 right-0 w-64 h-64 bg-[#B35A38] opacity-10 rounded-full -mr-20 -mt-20 blur-3xl" />
           </div>
 
+          {/* Status Messages */}
+          {submitStatus && (
+            <div className={`p-6 mx-10 mt-6 rounded-2xl flex items-start gap-4 ${
+              submitStatus.type === 'success' 
+                ? 'bg-green-50 border border-green-200' 
+                : 'bg-red-50 border border-red-200'
+            }`}>
+              {submitStatus.type === 'success' ? (
+                <CheckCircle size={24} className="text-green-600 flex-shrink-0 mt-1" />
+              ) : (
+                <AlertCircle size={24} className="text-red-600 flex-shrink-0 mt-1" />
+              )}
+              <div>
+                <p className={`${submitStatus.type === 'success' ? 'text-green-900' : 'text-red-900'}`}>
+                  {submitStatus.message}
+                </p>
+                {bookingId && submitStatus.type === 'success' && (
+                  <p className="text-green-700 text-sm mt-2">
+                    Check your email for booking confirmation.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Flight Tracking Status */}
+          {bookingId && flightBooking && (
+            <div className="p-6 mx-10 mt-4 rounded-2xl bg-blue-50 border border-blue-200">
+              <div className="flex items-center gap-2">
+                <Plane size={20} className="text-blue-600" />
+                <div>
+                  <p className="text-blue-900 font-semibold">{getFlightStatus()}</p>
+                  {flightBooking.tracking_status === 'landed' && (
+                    <p className="text-blue-700 text-sm mt-1">Driver has been notified and is on the way to pick you up! 🚗</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="p-10 md:p-16 space-y-10">
             
-            {/* SECTION 1: ROUTE & FLIGHT INFO */}
+            {/* ROUTE & FLIGHT INFO */}
             <div className="space-y-6">
               <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900 border-b border-gray-100 pb-4 uppercase tracking-widest">
                 <MapPin size={18} className="text-[#B35A38]" /> 01. Route Details
@@ -82,9 +249,11 @@ export default function BookingForm() {
                     onChange={handleChange}
                     type="text" 
                     placeholder="Airport, Hotel, or Home..." 
-                    className="w-full p-5 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#C5A059] focus:bg-white transition-all outline-none text-gray-800 font-medium"
-                    required
+                    className={`w-full p-5 bg-gray-50 rounded-2xl border-2 focus:bg-white transition-all outline-none text-gray-800 font-medium ${
+                      formErrors.pickup ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-[#C5A059]'
+                    }`}
                   />
+                  {formErrors.pickup && <p className="text-red-500 text-xs mt-2 ml-2">{formErrors.pickup}</p>}
                 </div>
                 <div className="group">
                   <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Drop-off Point</label>
@@ -94,13 +263,15 @@ export default function BookingForm() {
                     onChange={handleChange}
                     type="text" 
                     placeholder="Where are we heading?" 
-                    className="w-full p-5 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#C5A059] focus:bg-white transition-all outline-none text-gray-800 font-medium"
-                    required
+                    className={`w-full p-5 bg-gray-50 rounded-2xl border-2 focus:bg-white transition-all outline-none text-gray-800 font-medium ${
+                      formErrors.destination ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-[#C5A059]'
+                    }`}
                   />
+                  {formErrors.destination && <p className="text-red-500 text-xs mt-2 ml-2">{formErrors.destination}</p>}
                 </div>
               </div>
 
-              {/* NEW: Optional Flight Number Field */}
+              {/* Flight Number Field */}
               <div className="group pt-2">
                 <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 mb-2 ml-2">
                   <Plane size={12} className="text-[#C5A059]" /> Flight Number (Optional)
@@ -113,10 +284,15 @@ export default function BookingForm() {
                   placeholder="e.g., KQ102 (We track your arrival)" 
                   className="w-full md:w-1/2 p-5 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#C5A059] focus:bg-white transition-all outline-none text-gray-800 font-medium"
                 />
+                {trackingLoading && formData.flightNumber && (
+                  <p className="text-blue-600 text-xs mt-2 ml-2 flex items-center gap-1">
+                    <Loader size={12} className="animate-spin" /> Activating flight tracking...
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* SECTION 2: SCHEDULE & PAX */}
+            {/* SCHEDULE & PAX */}
             <div className="space-y-6">
               <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900 border-b border-gray-100 pb-4 uppercase tracking-widest">
                 <Calendar size={18} className="text-[#B35A38]" /> 02. Schedule & Duration
@@ -129,9 +305,11 @@ export default function BookingForm() {
                     type="date"
                     value={formData.date}
                     onChange={handleChange}
-                    className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-gray-800"
-                    required
+                    className={`w-full p-5 bg-gray-50 rounded-2xl border-2 text-gray-800 outline-none ${
+                      formErrors.date ? 'border-red-500 focus:ring-red-500' : 'border-transparent focus:ring-2 focus:ring-[#C5A059]'
+                    }`}
                   />
+                  {formErrors.date && <p className="text-red-500 text-xs mt-2 ml-2">{formErrors.date}</p>}
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Pickup Time</label>
@@ -140,9 +318,11 @@ export default function BookingForm() {
                     type="time"
                     value={formData.time}
                     onChange={handleChange}
-                    className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-gray-800"
-                    required
+                    className={`w-full p-5 bg-gray-50 rounded-2xl border-2 text-gray-800 outline-none ${
+                      formErrors.time ? 'border-red-500 focus:ring-red-500' : 'border-transparent focus:ring-2 focus:ring-[#C5A059]'
+                    }`}
                   />
+                  {formErrors.time && <p className="text-red-500 text-xs mt-2 ml-2">{formErrors.time}</p>}
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Duration (Hours)</label>
@@ -173,7 +353,7 @@ export default function BookingForm() {
               </div>
             </div>
 
-            {/* SECTION 3: VEHICLE */}
+            {/* VEHICLE */}
             <div className="space-y-6">
               <h4 className="flex items-center gap-2 text-sm font-bold text-gray-900 border-b border-gray-100 pb-4 uppercase tracking-widest">
                 <Car size={18} className="text-[#B35A38]" /> 03. Vehicle Class
@@ -201,12 +381,21 @@ export default function BookingForm() {
             <div className="pt-6">
               <button 
                 type="submit"
-                className="w-full group bg-[#1A1A1A] text-white py-6 rounded-[2rem] font-bold text-xl flex items-center justify-center gap-4 hover:bg-[#B35A38] transition-all duration-500 shadow-xl"
+                disabled={isSubmitting}
+                className="w-full group bg-[#1A1A1A] text-white py-6 rounded-[2rem] font-bold text-xl flex items-center justify-center gap-4 hover:bg-[#B35A38] transition-all duration-500 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Request Chauffeur <ChevronRight className="group-hover:translate-x-2 transition-transform" />
+                {isSubmitting ? (
+                  <>
+                    <Loader size={20} className="animate-spin" /> Processing...
+                  </>
+                ) : (
+                  <>
+                    Request Chauffeur <ChevronRight className="group-hover:translate-x-2 transition-transform" />
+                  </>
+                )}
               </button>
               <p className="text-center text-gray-400 text-xs mt-6 flex items-center justify-center gap-2 italic">
-                <Info size={14} /> This inquiry will be confirmed via WhatsApp
+                <Info size={14} /> Confirmation will be sent via WhatsApp & Database
               </p>
             </div>
 
