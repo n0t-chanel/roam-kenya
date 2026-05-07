@@ -77,30 +77,33 @@ const services = [
 
 export default function ServiceFlipCards() {
   return (
-    <section className="py-16 md:py-6 bg-white px-6">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <section className="py-24 bg-[#050505] px-6 relative">
+      {/* Background glow for depth */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#B35A38]/5 rounded-full blur-[150px] pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
         {services.map((svc) => (
           <div key={svc.id} id={svc.id} className="group h-[450px] [perspective:1000px]">
             <div className="relative h-full w-full transition-all duration-700 [transform-style:preserve-3d] group-hover:[transform:rotateY(180deg)] [&.is-flipped]:[transform:rotateY(180deg)]">
               
-              {/* FRONT SIDE */}
-              <div className="absolute inset-0 bg-gray-50 rounded-[2rem] p-8 flex flex-col justify-center items-center text-center border border-gray-100 [backface-visibility:hidden]">
-                <div className="text-[#B35A38] mb-6">{svc.icon}</div>
-                <h3 className="text-2xl font-bold mb-4">{svc.title}</h3>
-                <p className="text-gray-500 text-sm">{svc.frontText}</p>
-                <div className="mt-8 text-[10px] font-bold uppercase tracking-[0.2em] text-[#C5A059] opacity-0 group-hover:opacity-100 transition-opacity">
-                  View Details
+              {/* FRONT SIDE (Dark Bento Style) */}
+              <div className="absolute inset-0 bg-[#0a0a0a] rounded-[2.5rem] p-8 flex flex-col justify-center items-center text-center border border-white/5 [backface-visibility:hidden] shadow-2xl group-hover:border-[#C5A059]/20 transition-colors">
+                <div className="text-[#C5A059] mb-6 bg-white/5 p-4 rounded-2xl border border-white/10 group-hover:scale-110 transition-transform duration-500">{svc.icon}</div>
+                <h3 className="text-2xl font-bold mb-4 text-white">{svc.title}</h3>
+                <p className="text-gray-400 font-light text-sm">{svc.frontText}</p>
+                <div className="mt-10 text-[10px] font-bold uppercase tracking-[0.2em] text-[#C5A059] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-2">
+                  Explore <ArrowRight size={12} />
                 </div>
               </div>
 
-              {/* BACK SIDE */}
-              <div className="absolute inset-0 bg-[#1A1A1A] text-white rounded-[2rem] p-8 flex flex-col justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
+              {/* BACK SIDE (Gradient & Glowing Edge) */}
+              <div className="absolute inset-0 bg-gradient-to-br from-[#1A1A1A] to-[#0a0a0a] border border-[#C5A059]/30 shadow-[0_0_30px_rgba(197,160,89,0.15)] text-white rounded-[2.5rem] p-8 flex flex-col justify-between [transform:rotateY(180deg)] [backface-visibility:hidden]">
                 <div>
-                  <h4 className="text-[#C5A059] font-bold text-lg mb-6">{svc.backTitle}</h4>
+                  <h4 className="text-[#C5A059] font-bold text-xl mb-6 font-serif italic">{svc.backTitle}</h4>
                   <ul className="space-y-4">
                     {svc.backPoints.map((point, i) => (
-                      <li key={i} className="text-xs text-gray-300 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-[#C5A059] rounded-full"></span> {point}
+                      <li key={i} className="text-sm text-gray-300 flex items-start gap-3 font-light">
+                        <span className="w-1.5 h-1.5 bg-[#B35A38] rounded-full mt-1.5 flex-shrink-0"></span> {point}
                       </li>
                     ))}
                   </ul>
@@ -111,7 +114,7 @@ export default function ServiceFlipCards() {
                     href={svc.link} 
                     target="_blank" 
                     rel="noreferrer" 
-                    className="w-full py-4 bg-[#B35A38] rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#C5A059] transition-colors"
+                    className="w-full py-4 bg-[#C5A059] text-black rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-colors shadow-lg"
                   >
                     {svc.cta} <ArrowRight size={14} />
                   </a>
@@ -119,7 +122,7 @@ export default function ServiceFlipCards() {
                   <HashLink 
                     smooth 
                     to={svc.link} 
-                    className="w-full py-4 bg-[#B35A38] rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-[#C5A059] transition-colors"
+                    className="w-full py-4 bg-[#C5A059] text-black rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white transition-colors shadow-lg"
                   >
                     {svc.cta} <ArrowRight size={14} />
                   </HashLink>
