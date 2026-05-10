@@ -42,8 +42,13 @@ export default function BookingForm() {
     
     // Validate date is not in past
     const selectedDate = new Date(formData.date);
-    if (selectedDate < new Date()) {
-      errors.date = "Please select a future date";
+    const today = new Date();
+    // Compare only the date part (ignore time) to allow same-day pickups
+    const selectedDateOnly = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    const todayDateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
+    if (selectedDateOnly < todayDateOnly) {
+      errors.date = "Please select today or a future date";
     }
     
     setFormErrors(errors);
