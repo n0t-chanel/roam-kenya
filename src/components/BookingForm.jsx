@@ -5,6 +5,7 @@ import BackButton from "../components/BackButton";
 import { useDatabase } from "../hooks/useDatabase";
 import { useAuthContext } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
+import { sendBookingEmail } from "../lib/emailService";
 
 export default function BookingForm() {
   const location = useLocation(); 
@@ -161,6 +162,31 @@ export default function BookingForm() {
         }
       }
 
+
+      // Send booking confirmation email via Resend
+      try {
+        console.log('📧 Sending booking confirmation email...');
+        const emailResponse = await sendBookingEmail({
+          bookingId: bid,
+          userEmail: user.email,
+          userName: user.user_metadata?.full_name || user.email,
+          pickupLocation: formData.pickup,
+          destinationLocation: formData.destination,
+          pickupDate: formData.date,
+          pickupTime: formData.time,
+          passengers: parseInt(formData.passengers),
+          vehicleType: formData.vehicleType,
+          flightNumber: formData.flightNumber || undefined,
+        });
+
+        if (emailResponse.success) {
+          console.log('✅ Email sent successfully');
+        } else {
+          console.warn('⚠️ Email sending failed:', emailResponse.error);
+        }
+      } catch (emailErr) {
+        console.error('Email sending error:', emailErr);
+      }
 
       // Send WhatsApp confirmation as backup
       if (whatsappFallback) {

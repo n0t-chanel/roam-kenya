@@ -1,13 +1,18 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { HashLink } from "react-router-hash-link";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, LogIn, User } from "lucide-react";
+import { useAuthContext } from "../context/AuthContext";
+import LoginModal from "./LoginModal";
+import UserProfile from "./UserProfile";
 
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuthContext();
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -65,6 +70,20 @@ export default function Navbar() {
           >
             Book Now
           </button>
+
+          {/* Person Illustration Login Icon */}
+          {user ? (
+            <UserProfile />
+          ) : (
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="group relative flex items-center justify-center p-3 rounded-full bg-gradient-to-br from-[#B35A38]/20 to-[#C5A059]/20 hover:from-[#B35A38]/30 hover:to-[#C5A059]/30 border border-[#C5A059]/30 transition-all duration-300 hover:shadow-lg hover:shadow-[#B35A38]/30"
+              title="Login / Sign Up"
+            >
+              <User size={24} className="text-white group-hover:text-[#C5A059] transition-colors" />
+              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-[#B35A38]/0 via-[#B35A38]/10 to-[#B35A38]/0 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          )}
         </div>
 
         {/* Mobile Toggle */}
@@ -72,6 +91,9 @@ export default function Navbar() {
           {isOpen ? <X size={28} /> : <Menu size={28} />}
         </button>
       </div>
+
+      {/* Login Modal */}
+      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
     </nav>
   );
 }

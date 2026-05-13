@@ -326,6 +326,8 @@ CREATE POLICY "Service role can insert flight bookings" ON flight_bookings
 4. Check Supabase: SELECT * FROM flight_bookings
 5. Should see new flight_bookings record
 ```
+// re_LocMCpJr_FFTststguenZQMpqARe2HBJw  // rsnd api keys
+
 
 ---
 
