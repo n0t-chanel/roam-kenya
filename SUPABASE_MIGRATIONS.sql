@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   duration TEXT,
   passengers INTEGER DEFAULT 1,
   vehicle_type TEXT,
-  service_category TEXT,
+  service_category TEXT, -- airport-transfer, chauffeur-rental, hotel-transfer, intercity-ride, wedding-travel, safari-tour, fleet-management
   status TEXT DEFAULT 'pending', -- pending, confirmed, completed, cancelled
   notes TEXT,
   total_price DECIMAL(10, 2),

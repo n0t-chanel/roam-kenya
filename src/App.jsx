@@ -16,6 +16,7 @@ import Destination from "./pages/Destination";
 import AboutPage from "./pages/AboutPage"; 
 import Services from './pages/Services';
 import AuthPage from "./pages/AuthPage";
+import BookingPage from "./pages/BookingPage";
 
 function App() {
   const [isLoading, setIsLoading] = useState(true);
@@ -58,7 +59,7 @@ function App() {
               <Route path="/services" element={<Services />} />
               <Route path="/destinations" element={<Destination />} />
               <Route path="/auth" element={<AuthPage />} />
-              <Route path="/booking" element={<BookingForm />} />
+              <Route path="/booking" element={<BookingPage />} />
             </Routes>
           </main>
 
