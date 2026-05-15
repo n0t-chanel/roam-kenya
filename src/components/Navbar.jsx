@@ -23,6 +23,11 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsOpen(false);
+  }, [location.pathname, location.hash]);
+
   const serviceItems = [
     { name: "Airport Transfers", hash: "/services#transfers" },
     { name: "Chauffeur Rentals", hash: "/services#rentals" },
@@ -69,13 +74,31 @@ export default function Navbar() {
                 ))}
               </div>
             </div>
+
+            <Link to="/destinations" className={`text-[10px] uppercase tracking-[0.2em] font-bold transition-colors ${location.pathname === "/destinations" ? "text-[#C5A059]" : "text-white hover:text-[#C5A059]"}`}>
+              Destinations
+            </Link>
+            <Link to="/auth" className={`text-[10px] uppercase tracking-[0.2em] font-bold transition-colors ${location.pathname === "/auth" ? "text-[#C5A059]" : "text-white hover:text-[#C5A059]"}`}>
+                 Client Login
+                  </Link>
+            
+            <button 
+              onClick={() => navigate("/booking")}
+              className="bg-[#C5A059] text-black px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-white hover:shadow-[0_0_20px_rgba(197,160,89,0.3)] transition-all duration-300"
+            >
+              
+              Book Now
+            </button>
           </div>
 
           <Link to="/destinations" className={`${navTextClass} text-[11px] uppercase tracking-[0.2em] font-bold`}>Destinations</Link>
           
           <button 
-            onClick={() => navigate("/booking")}
-            className="bg-[#B35A38] text-white px-6 py-2.5 rounded-md text-[11px] font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-all"
+            onClick={() => {
+              setIsOpen(false);
+              navigate("/booking");
+            }}
+            className="mt-8 bg-[#C5A059] text-black w-full max-w-[200px] py-4 rounded-2xl text-xs font-bold uppercase tracking-[0.2em] hover:bg-white transition-all"
           >
             Book Now
           </button>

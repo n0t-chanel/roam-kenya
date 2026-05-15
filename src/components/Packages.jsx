@@ -1,101 +1,136 @@
-import React from "react";
-import { ArrowRight, Tag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Check, ArrowRight, Star, MapPin } from "lucide-react";
 
 const packages = [
   {
     id: 1,
-    name: "Airport Executive",
-    priceUSD: 40,
-    route: "JKIA — Nairobi City Center",
-    type: "Premium Sedan",
-    features: ["Meet & Greet", "Flight Tracking", "Bottled Water"],
-    discount: "Popular"
+    title: "City Executive",
+    route: "JKIA ⇄ Nairobi Hotels",
+    price: "From KES 3,500",
+    duration: "Per Transfer",
+    features: [
+      "VIP Meet & Greet at Arrivals",
+      "60 Mins Complimentary Wait Time",
+      "Executive Sedan (Up to 3 Pax)",
+      "Complimentary Bottled Water"
+    ],
+    isPopular: false,
   },
   {
     id: 2,
-    name: "The Safari Shuttle",
-    priceUSD: 350,
-    route: "Nairobi — Masai Mara",
-    type: "4x4 Land Cruiser",
-    features: ["Expert Chauffeur", "Pop-up Roof", "Full Day Trip"],
-    discount: "Best Value"
+    title: "The Safari Class",
+    route: "Nairobi ⇄ Mara / Ol Pejeta",
+    price: "Custom Quote",
+    duration: "Multi-Day",
+    features: [
+      "Dedicated Expert Driver-Guide",
+      "Modified 4x4 Safari Cruiser",
+      "Unlimited Game Drives",
+      "Pop-up Roof & VHF Radio"
+    ],
+    isPopular: true,
   },
   {
     id: 3,
-    name: "Coastal Connector",
-    priceUSD: 280,
-    route: "Nairobi — Diani / Mombasa",
-    type: "Luxury Van",
-    features: ["Up to 7 Pax", "Free Wi-Fi", "Express Highway"],
-    discount: "10% Off"
-  },
+    title: "Intercity Escape",
+    route: "Nairobi ⇄ Naivasha / Nakuru",
+    price: "From KES 18,000",
+    duration: "Per Day",
+    features: [
+      "Luxury SUV (Up to 7 Pax)",
+      "Flexible Routing & Stopovers",
+      "Elite, Discreet Chauffeur",
+      "Premium Refreshments & Wi-Fi"
+    ],
+    isPopular: false,
+  }
 ];
 
 export default function Packages() {
   const navigate = useNavigate();
-  const KES_RATE = 130; 
 
   return (
-    /* 1. overflow-hidden on the section stops the whole page from shifting */
-    <section className="pt-16 pb-0 md:py-20 bg-white overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6">
+    <section className="py-24 bg-[#050505] relative overflow-hidden">
+      {/* Background Glow Effect */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#C5A059]/5 rounded-full blur-[120px] pointer-events-none" />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
         
-        <div className="flex flex-col md:flex-row justify-between items-end mb-12">
-          <div className="max-w-xl">
-            <span className="text-[#B35A38] font-bold tracking-[0.3em] uppercase text-[10px]">Fixed Rates</span>
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mt-2 italic font-serif">Premium Route Packages</h2>
+        {/* Section Header */}
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <div className="flex items-center justify-center gap-4 mb-4">
+            <div className="w-8 h-[1px] bg-[#B35A38]" />
+            <span className="text-[#B35A38] font-bold tracking-[.3em] uppercase text-[10px]">Curated Journeys</span>
+            <div className="w-8 h-[1px] bg-[#B35A38]" />
           </div>
-          <p className="text-gray-400 text-[10px] uppercase tracking-widest hidden md:block mb-1 font-bold">
-            Live Conversion: 1 USD = {KES_RATE} KES
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
+            Signature <span className="text-[#C5A059] italic font-light">Transit Packages</span>
+          </h2>
+          <p className="text-gray-400 font-light text-sm md:text-base">
+            Transparent pricing meets unparalleled luxury. Select a package tailored to your itinerary, or contact us for bespoke travel arrangements across East Africa.
           </p>
         </div>
 
-        {/* 2. THE SCROLL FIX: 
-           -mx-6 + px-6 ensures the cards can touch the screen edges during scroll 
-           without breaking the alignment with the text above. 
-        */}
-        <div className="flex gap-6 overflow-x-auto pb-10 snap-x no-scrollbar -mx-6 px-6">
+        {/* Pricing Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
           {packages.map((pkg) => (
             <div 
               key={pkg.id} 
-              className="min-w-[300px] md:min-w-[380px] bg-gray-50 rounded-[2.5rem] p-8 border border-gray-100 snap-center group shadow-sm hover:shadow-xl transition-all duration-500"
+              className={`relative rounded-[2rem] p-8 transition-all duration-500 hover:-translate-y-2 ${
+                pkg.isPopular 
+                  ? "bg-gradient-to-b from-[#1A1A1A] to-[#0a0a0a] border border-[#C5A059]/30 shadow-[0_0_40px_rgba(197,160,89,0.1)] py-12 md:-my-8 z-10" 
+                  : "bg-[#0a0a0a] border border-white/10 hover:border-white/20"
+              }`}
             >
-              <div className="flex justify-between items-start mb-8">
-                <div className="bg-[#B35A38] text-white text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  {pkg.discount}
+              {/* Popular Badge */}
+              {pkg.isPopular && (
+                <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-[#C5A059] text-black text-[10px] font-bold uppercase tracking-widest px-4 py-2 rounded-full flex items-center gap-2 shadow-xl">
+                  <Star size={12} fill="black" /> Top Choice
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-gray-900 leading-none">${pkg.priceUSD}</p>
-                  <p className="text-[#C5A059] font-bold text-[11px] mt-1">
-                    Ksh {(pkg.priceUSD * KES_RATE).toLocaleString()}
-                  </p>
+              )}
+
+              {/* Card Header */}
+              <div className="text-center mb-8 border-b border-white/10 pb-8">
+                <h3 className="text-2xl font-bold text-white mb-3">{pkg.title}</h3>
+                <div className="flex items-center justify-center gap-2 text-gray-400 text-xs mb-6">
+                  <MapPin size={14} className="text-[#B35A38]" /> {pkg.route}
+                </div>
+                <div className="flex flex-col items-center justify-center">
+                  <span className="text-3xl font-bold text-white">{pkg.price}</span>
+                  <span className="text-[10px] text-gray-500 uppercase tracking-widest mt-2">{pkg.duration}</span>
                 </div>
               </div>
 
-              <h3 className="text-xl font-bold mb-1">{pkg.name}</h3>
-              <p className="text-gray-500 text-xs mb-6 flex items-center gap-2">
-                <Tag size={12} className="text-[#C5A059]" /> {pkg.route}
-              </p>
-
-              <div className="space-y-3 mb-8">
+              {/* Features List */}
+              <ul className="space-y-4 mb-8">
                 {pkg.features.map((feature, i) => (
-                  <div key={i} className="flex items-center gap-3 text-[13px] text-gray-600">
-                    <div className="w-1 h-1 bg-[#C5A059] rounded-full" />
-                    {feature}
-                  </div>
+                  <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
+                    <Check size={16} className={pkg.isPopular ? "text-[#C5A059] mt-0.5" : "text-gray-500 mt-0.5"} />
+                    <span className="leading-relaxed">{feature}</span>
+                  </li>
                 ))}
-              </div>
+              </ul>
 
-              <button 
-                onClick={() => navigate("/booking")}
-                className="w-full bg-gray-900 text-white py-4 rounded-xl font-bold hover:bg-[#B35A38] transition-all flex items-center justify-center gap-2 text-sm shadow-md active:scale-95"
-              >
-                Book Route <ArrowRight size={16} />
-              </button>
+             {/* CTA Button */}
+<button 
+  onClick={() => navigate("/booking", { 
+    state: { 
+      packageTitle: pkg.title, // <--- Passes the specific package name (e.g., "The Safari Class")
+      type: "Curated Package" 
+    }
+  })}
+  className={`w-full py-4 rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+    pkg.isPopular 
+      ? "bg-[#C5A059] text-black hover:bg-white shadow-lg" 
+      : "bg-[#1A1A1A] text-white hover:bg-[#B35A38]"
+  }`}
+>
+  Select Package <ArrowRight size={14} />
+</button>
             </div>
           ))}
         </div>
+
       </div>
     </section>
   );

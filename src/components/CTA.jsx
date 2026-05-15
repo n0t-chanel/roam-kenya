@@ -1,51 +1,75 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowRight, MessageSquare } from "lucide-react";
 
 export default function CTA() {
   const navigate = useNavigate();
 
-  const handlePartnerChat = () => {
+  const handleWhatsApp = () => {
     const phoneNumber = "254705416781";
-    const message = "Hello Jamupet Transit Solutions, I am interested in partnering by adding my vehicle to your fleet.";
+    const message = "Hello Jamupet Transit, I have a quick question about booking a transfer.";
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
   return (
-    <section className="pt-16 pb-6 bg-white px-6">
-      <div className="max-w-7xl mx-auto overflow-hidden rounded-[3rem] bg-[#1A1A1A] flex flex-col md:flex-row shadow-2xl border border-white/5">
-        
-        {/* LEFT SIDE: TRAVELER */}
-        <div className="flex-1 p-10 md:p-14 flex flex-col justify-center border-b md:border-b-0 md:border-r border-white/10">
-          <h2 className="text-white text-3xl md:text-4xl font-bold mb-4 leading-tight">
-            Ready to hit the <br /> <span className="text-[#B35A38]">Kenyan Road?</span>
-          </h2>
-          <p className="text-gray-400 mb-8 text-sm md:text-base max-w-sm">
-            Book your professional chauffeur for airport transfers and custom safari tours today.
-          </p>
-          <button 
-            onClick={() => navigate("/booking")}
-            className="bg-[#B35A38] text-white px-8 py-4 rounded-xl font-bold hover:bg-white hover:text-black transition-all transform active:scale-95 w-fit text-sm"
-          >
-            Book My Ride Now
-          </button>
-        </div>
+    <section className="relative py-32 bg-[#050505] overflow-hidden flex items-center justify-center">
+      
+      {/* Cinematic Background Image */}
+      <div className="absolute inset-0 z-0">
+        <img 
+          src="/assets/chauffers-careers.webp" 
+          alt="Luxury Chauffeur Service" 
+          width="1920"
+          height="1080"
+          className="w-full h-full object-cover scale-105 opacity-40"
+          onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?q=80&w=1600"; }}
+        />
+        {/* Gradients to blend the image seamlessly into the black background */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-[#050505]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#050505] via-black/50 to-[#050505]" />
+      </div>
 
-        {/* RIGHT SIDE: PARTNER */}
-        <div className="flex-1 p-10 md:p-14 bg-gradient-to-br from-[#1A1A1A] to-[#2A2A2A] flex flex-col justify-center">
-          <h2 className="text-white text-2xl font-bold mb-4 italic">
-            Own a Vehicle? 
-          </h2>
-          <p className="text-gray-400 mb-8 text-sm max-w-sm">
-            Join the Jamupet Transit Solutions. We manage your vehicle and connect you with premium corporate clients.
-          </p>
-          <div className="flex flex-col gap-4">
-            <button 
-              onClick={handlePartnerChat}
-              className="border border-[#C5A059] text-[#C5A059] px-6 py-3 rounded-xl font-bold hover:bg-[#C5A059] hover:text-black transition-all w-fit text-sm"
-            >
-              Partner With Us
-            </button>
+      {/* Floating Glassmorphism Card */}
+      <div className="relative z-10 max-w-5xl mx-auto px-6 w-full">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[3rem] p-10 md:p-20 text-center shadow-2xl relative overflow-hidden">
+          
+          {/* Subtle Inner Glow */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] h-[300px] bg-[#C5A059]/20 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="relative z-20">
+            <span className="text-[#C5A059] font-bold tracking-[.3em] uppercase text-[10px] md:text-xs mb-6 block">
+              Your Premium Journey Awaits
+            </span>
+            
+            <h2 className="text-4xl md:text-6xl font-bold text-white mb-6 leading-tight font-serif">
+              Ready to experience the <br className="hidden md:block" />
+              <span className="italic font-light text-[#C5A059]">Gold Standard?</span>
+            </h2>
+            
+            <p className="text-gray-300 text-base md:text-lg max-w-2xl mx-auto font-light mb-12">
+              Whether it is a seamless airport transfer, a corporate roadshow, or a bespoke safari, our executive fleet is ready to move you across East Africa with unmatched precision and comfort.
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <button 
+                onClick={() => navigate("/booking")}
+                className="w-full sm:w-auto bg-[#C5A059] text-black px-10 py-5 rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-white transition-all shadow-[0_0_30px_rgba(197,160,89,0.3)] group"
+              >
+                Book Your Transfer 
+                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+              
+              <button 
+                onClick={handleWhatsApp}
+                className="w-full sm:w-auto bg-transparent border border-white/20 text-white px-10 py-5 rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-3 hover:bg-white/10 hover:border-white/40 transition-all"
+              >
+                <MessageSquare size={16} className="text-[#C5A059]" />
+                Speak to an Agent
+              </button>
+            </div>
           </div>
+          
         </div>
       </div>
     </section>

@@ -236,10 +236,10 @@ export default function BookingForm() {
   };
 
   return (
-    <section className="min-h-screen bg-[#FDFCFB] py-32 px-6">
+    <section className="min-h-screen bg-[#050505] py-32 px-6">
       <div className="max-w-4xl mx-auto">
         <BackButton />
-        <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] overflow-hidden border border-gray-100">
+        <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-gray-100">
           
           {/* Header */}
           <div className="bg-[#1A1A1A] p-12 text-white relative overflow-hidden">
@@ -327,14 +327,7 @@ export default function BookingForm() {
                 <label className="flex items-center gap-2 text-[10px] font-black uppercase text-gray-400 mb-2 ml-2">
                   <Plane size={12} className="text-[#C5A059]" /> Flight Number (Optional)
                 </label>
-                <input 
-                  name="flightNumber"
-                  value={formData.flightNumber}
-                  onChange={handleChange}
-                  type="text" 
-                  placeholder="e.g., KQ102 (We track your arrival)" 
-                  className="w-full md:w-1/2 p-5 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#C5A059] focus:bg-white transition-all outline-none text-gray-800 font-medium"
-                />
+                <input name="flightNumber" value={formData.flightNumber} onChange={handleChange} type="text" placeholder="e.g., KQ102 (We track your arrival)" className="w-full md:w-1/2 p-5 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-[#C5A059] focus:bg-white outline-none font-medium" />
               </div>
             </div>
 
@@ -373,28 +366,16 @@ export default function BookingForm() {
                   {formErrors.time && <p className="text-red-500 text-xs mt-2 ml-2">{formErrors.time}</p>}
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Duration (Hours)</label>
-                  <select 
-                    name="hours"
-                    value={formData.hours}
-                    onChange={handleChange}
-                    className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-gray-800 font-medium appearance-none cursor-pointer"
-                  >
+                  <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Duration</label>
+                  <select name="hours" value={formData.hours} onChange={handleChange} className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] font-medium cursor-pointer">
                     <option value="Transfer Only">Transfer Only</option>
-                    {[1, 2, 3, 4, 5, 6, 8, 12, 24].map(h => (
-                      <option key={h} value={`${h} Hour${h > 1 ? 's' : ''}`}>{h} Hour{h > 1 ? 's' : ''}</option>
-                    ))}
+                    {[1, 2, 3, 4, 5, 6, 8, 12, 24].map(h => <option key={h} value={`${h} Hour${h > 1 ? 's' : ''}`}>{h} Hour{h > 1 ? 's' : ''}</option>)}
                     <option value="Multiple Days">Multiple Days</option>
                   </select>
                 </div>
                 <div>
                   <label className="text-[10px] font-black uppercase text-gray-400 mb-2 block ml-2">Passengers</label>
-                  <select 
-                    name="passengers"
-                    value={formData.passengers}
-                    onChange={handleChange}
-                    className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] text-gray-800 font-medium appearance-none cursor-pointer"
-                  >
+                  <select name="passengers" value={formData.passengers} onChange={handleChange} className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-[#C5A059] font-medium cursor-pointer">
                     {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{n} Pax</option>)}
                   </select>
                 </div>
@@ -408,16 +389,7 @@ export default function BookingForm() {
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {['Executive Sedan', 'Luxury SUV', 'Safari Class'].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setFormData({...formData, vehicleType: type})}
-                    className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 ${
-                      formData.vehicleType === type 
-                      ? 'border-[#B35A38] bg-[#B35A38]/5 text-[#B35A38]' 
-                      : 'border-gray-100 text-gray-400 hover:border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
+                  <button key={type} type="button" onClick={() => setFormData({...formData, vehicleType: type})} className={`p-6 rounded-2xl border-2 transition-all flex flex-col items-center gap-3 ${formData.vehicleType === type ? 'border-[#B35A38] bg-[#B35A38]/5 text-[#B35A38]' : 'border-gray-100 text-gray-400 hover:border-gray-200 hover:bg-gray-50'}`}>
                     <Car size={24} />
                     <span className="font-bold text-xs uppercase tracking-tighter">{type}</span>
                   </button>
@@ -445,6 +417,22 @@ export default function BookingForm() {
               <p className="text-center text-gray-400 text-xs mt-6 flex items-center justify-center gap-2 italic">
                 <Info size={14} /> Confirmation will be sent via WhatsApp & Database
               </p>
+              {isSuccess ? (
+                <div className="w-full bg-[#1A1A1A] text-white py-6 rounded-[2rem] flex flex-col items-center justify-center gap-2 border border-[#C5A059]/30">
+                  <CheckCircle2 size={32} className="text-[#C5A059]" />
+                  <span className="font-bold text-lg">Reservation Received</span>
+                  <p className="text-gray-400 text-xs font-light">Our concierge team will contact you shortly to confirm.</p>
+                </div>
+              ) : (
+                <>
+                  <button type="submit" disabled={isSubmitting} className="w-full group bg-[#1A1A1A] text-white py-6 rounded-[2rem] font-bold text-xl flex items-center justify-center gap-4 hover:bg-[#B35A38] transition-all duration-500 shadow-xl disabled:opacity-70 disabled:cursor-not-allowed">
+                    {isSubmitting ? <><Loader2 className="animate-spin text-[#C5A059]" /> Processing...</> : <>Request Chauffeur <ChevronRight className="group-hover:translate-x-2 transition-transform" /></>}
+                  </button>
+                  <p className="text-center text-gray-400 text-xs mt-6 flex items-center justify-center gap-2 italic">
+                    <Info size={14} /> Your data is securely encrypted.
+                  </p>
+                </>
+              )}
             </div>
 
           </form>
