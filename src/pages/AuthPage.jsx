@@ -1,206 +1,317 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, ArrowRight, Eye, EyeOff, ShieldCheck, Loader2 } from "lucide-react";
-import BackButton from "../components/BackButton";
+import React, { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { AlertCircle, Loader, Mail, Lock, User, Chrome, Apple } from 'lucide-react'
+import { useAuth } from '../hooks/useAuth'
 
 export default function AuthPage() {
-  const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const { signUp, signIn, loading, error: authError, signInWithGoogle, signInWithApple } = useAuth()
   
+  const modeParam = searchParams.get('mode')
+  const [isSignUp, setIsSignUp] = useState(modeParam === 'signup' ? true : false)
+  const [oauthLoading, setOauthLoading] = useState(false)
+  const [oauthError, setOauthError] = useState(null)
   const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: ""
-  });
+    email: '',
+    password: '',
+    fullName: '',
+    confirmPassword: ''
+  })
+  const [formErrors, setFormErrors] = useState({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const validateForm = () => {
+    const errors = {}
+
+    if (!formData.email.trim()) {
+      errors.email = 'Email is required'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      errors.email = 'Invalid email format'
+    }
+
+    if (!formData.password) {
+      errors.password = 'Password is required'
+    } else if (formData.password.length < 6) {
+      errors.password = 'Password must be at least 6 characters'
+    }
+
+    if (isSignUp) {
+      if (!formData.fullName.trim()) {
+        errors.fullName = 'Full name is required'
+      }
+      if (formData.password !== formData.confirmPassword) {
+        errors.confirmPassword = 'Passwords do not match'
+      }
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+    const { name, value } = e.target
+    setFormData(prev => ({ ...prev, [name]: value }))
+    if (formErrors[name]) {
+      setFormErrors(prev => ({ ...prev, [name]: null }))
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setOauthLoading(true)
+    setOauthError(null)
+    try {
+      const result = await signInWithGoogle()
+      if (!result.success) {
+        setOauthError(result.error?.message || 'Google login failed')
+      }
+    } catch (err) {
+      setOauthError(err.message || 'Failed to login with Google')
+    } finally {
+      setOauthLoading(false)
+    }
+  }
+
+  const handleAppleLogin = async () => {
+    setOauthLoading(true)
+    setOauthError(null)
+    try {
+      const result = await signInWithApple()
+      if (!result.success) {
+        setOauthError(result.error?.message || 'Apple login failed')
+      }
+    } catch (err) {
+      setOauthError(err.message || 'Failed to login with Apple')
+    } finally {
+      setOauthLoading(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
+    e.preventDefault()
 
-    // Placeholder for Supabase Auth logic
-    setTimeout(() => {
-      setIsLoading(false);
-      // alert(isLogin ? "Logged in successfully!" : "Account created successfully!");
-      // navigate("/dashboard"); 
-    }, 1500);
-  };
+    if (!validateForm()) return
+
+    setIsSubmitting(true)
+
+    try {
+      if (isSignUp) {
+        await signUp(formData.email, formData.password)
+      } else {
+        await signIn(formData.email, formData.password)
+      }
+
+      // Redirect to booking after auth
+      setTimeout(() => navigate('/booking'), 1000)
+    } catch (err) {
+      console.error('Auth error:', err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white flex selection:bg-[#C5A059] selection:text-black">
-      <BackButton />
+    <section className="min-h-screen bg-gradient-to-br from-[#1A1A1A] via-[#2a2a2a] to-[#B35A38] flex items-center justify-center px-6 py-20">
+      <div className="w-full max-w-md">
+        <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 shadow-2xl overflow-hidden p-8">
 
-      {/* LEFT SIDE: Cinematic Image (Hidden on Mobile) */}
-      <div className="hidden lg:flex w-1/2 relative overflow-hidden items-center justify-center">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src="/assets/suv.webp" // Feel free to swap with an interior car shot!
-            alt="Luxury Fleet" 
-            className="w-full h-full object-cover opacity-40 scale-105"
-            onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=1000"; }}
-          />
-          {/* Heavy gradients to blend image smoothly into the dark theme */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#050505]/50 via-transparent to-[#050505]" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-transparent to-transparent" />
-        </div>
+          {/* Decorative blurs */}
+          <div className="absolute top-0 right-0 w-40 h-40 bg-[#B35A38]/20 rounded-full blur-3xl -z-10" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-[#C5A059]/20 rounded-full blur-3xl -z-10" />
 
-        <div className="relative z-10 max-w-md text-left px-12">
-          <ShieldCheck size={48} className="text-[#C5A059] mb-8 opacity-80" />
-          <span className="text-[#C5A059] font-bold tracking-[.3em] text-[10px] uppercase mb-4 block">
-            Client Portal
-          </span>
-          <h1 className="text-5xl font-serif font-bold leading-tight mb-6">
-            Your Premium <br />
-            <span className="italic font-light">Journey Awaits.</span>
-          </h1>
-          <p className="text-gray-400 font-light leading-relaxed">
-            Create an account to manage your bookings, save your preferred routes, and access exclusive VIP fleet upgrades.
-          </p>
-        </div>
-      </div>
-
-      {/* RIGHT SIDE: Interactive Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
-        {/* Subtle Background Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-[#B35A38]/10 rounded-full blur-[120px] pointer-events-none" />
-
-        <div className="w-full max-w-md relative z-10">
-          
-          {/* Logo for Mobile only */}
-          <div className="lg:hidden flex justify-center mb-10">
-            <img src="/jts-logoo.png" alt="Jamupet Logo" className="h-12 w-auto object-contain opacity-80" />
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <div className="w-12 h-12 bg-[#B35A38] rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-[#B35A38]/30">
+                R
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">Roam Kenya</h1>
+            <p className="text-white/60 text-sm">
+              {isSignUp ? 'Create your account' : 'Welcome back'}
+            </p>
           </div>
 
-          <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-10 shadow-2xl">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
             
-            {/* Toggle Switch (Login vs Signup) */}
-            <div className="flex bg-[#0a0a0a] rounded-xl p-1 mb-10 border border-white/5 relative">
-              <div 
-                className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-[#1A1A1A] rounded-lg shadow-md border border-white/10 transition-all duration-300 ease-in-out ${isLogin ? 'left-1' : 'left-[calc(50%+2px)]'}`}
-              />
-              <button 
-                className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest relative z-10 transition-colors duration-300 ${isLogin ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                onClick={() => setIsLogin(true)}
+            {/* OAuth Error Alert */}
+            {oauthError && (
+              <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 flex items-start gap-3">
+                <AlertCircle size={18} className="text-red-300 flex-shrink-0 mt-0.5" />
+                <p className="text-red-200 text-sm">{oauthError}</p>
+              </div>
+            )}
+
+            {/* OAuth Buttons */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={oauthLoading || isSubmitting || loading}
+                className="w-full group relative overflow-hidden rounded-2xl p-3.5 transition-all duration-300 bg-white/10 hover:bg-white/20 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign In
+                <div className="flex items-center justify-center gap-3">
+                  <Chrome size={20} className="text-[#4285F4]" />
+                  <span className="text-white font-semibold text-sm">Continue with Google</span>
+                </div>
               </button>
-              <button 
-                className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest relative z-10 transition-colors duration-300 ${!isLogin ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}
-                onClick={() => setIsLogin(false)}
+
+              <button
+                type="button"
+                onClick={handleAppleLogin}
+                disabled={oauthLoading || isSubmitting || loading}
+                className="w-full group relative overflow-hidden rounded-2xl p-3.5 transition-all duration-300 bg-white/10 hover:bg-white/20 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Account
+                <div className="flex items-center justify-center gap-3">
+                  <Apple size={20} className="text-white" />
+                  <span className="text-white font-semibold text-sm">Continue with Apple</span>
+                </div>
               </button>
             </div>
 
-            {/* Form Headers */}
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold text-white mb-2">
-                {isLogin ? "Welcome Back" : "Join the Elite"}
-              </h2>
-              <p className="text-gray-400 text-sm font-light">
-                {isLogin ? "Enter your credentials to access your dashboard." : "Set up your secure client profile."}
+            {/* Divider */}
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-white/20" />
+              <span className="text-white/60 text-xs font-semibold">OR</span>
+              <div className="flex-1 h-px bg-white/20" />
+            </div>
+
+            {/* Auth Error Alert */}
+            {authError && (
+              <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 flex items-start gap-3">
+                <AlertCircle size={18} className="text-red-300 flex-shrink-0 mt-0.5" />
+                <p className="text-red-200 text-sm">{authError}</p>
+              </div>
+            )}
+
+            {/* Full Name (Sign Up Only) */}
+            {isSignUp && (
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
+                  <User size={14} /> Full Name
+                </label>
+                <input
+                  type="text"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  placeholder="John Doe"
+                  className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                    formErrors.fullName ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
+                  }`}
+                />
+                {formErrors.fullName && (
+                  <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.fullName}</p>
+                )}
+              </div>
+            )}
+
+            {/* Email */}
+            <div>
+              <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
+                <Mail size={14} /> Email Address
+              </label>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                  formErrors.email ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
+                }`}
+              />
+              {formErrors.email && (
+                <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.email}</p>
+              )}
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
+                <Lock size={14} /> Password
+              </label>
+              <input
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                  formErrors.password ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
+                }`}
+              />
+              {formErrors.password && (
+                <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.password}</p>
+              )}
+            </div>
+
+            {/* Confirm Password (Sign Up Only) */}
+            {isSignUp && (
+              <div>
+                <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
+                  <Lock size={14} /> Confirm Password
+                </label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="••••••••"
+                  className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                    formErrors.confirmPassword ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
+                  }`}
+                />
+                {formErrors.confirmPassword && (
+                  <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.confirmPassword}</p>
+                )}
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting || loading}
+              className="w-full bg-[#B35A38] hover:bg-[#a04a2a] text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-6 shadow-lg shadow-[#B35A38]/20"
+            >
+              {isSubmitting || loading ? (
+                <>
+                  <Loader size={18} className="animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                isSignUp ? 'Create Account' : 'Sign In'
+              )}
+            </button>
+
+            {/* Toggle Auth Mode */}
+            <div className="text-center pt-4 border-t border-white/10">
+              <p className="text-white/60 text-sm">
+                {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp)
+                    setFormData({ email: '', password: '', fullName: '', confirmPassword: '' })
+                    setFormErrors({})
+                  }}
+                  className="text-[#C5A059] font-bold hover:underline"
+                >
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </button>
               </p>
             </div>
+          </form>
+        </div>
 
-            {/* FORM */}
-            <form onSubmit={handleSubmit} className="space-y-5">
-              
-              {/* Name Field (Animated: Only shows on Signup) */}
-              <div className={`transition-all duration-500 ease-in-out overflow-hidden ${isLogin ? "max-h-0 opacity-0" : "max-h-24 opacity-100"}`}>
-                <div className="relative group">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-[#C5A059] transition-colors">
-                    <User size={18} />
-                  </div>
-                  <input 
-                    type="text" 
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    placeholder="Full Legal Name" 
-                    required={!isLogin}
-                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white text-sm focus:outline-none focus:border-[#C5A059] transition-all placeholder:text-gray-600 font-light"
-                  />
-                </div>
-              </div>
-
-              {/* Email Field */}
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-[#C5A059] transition-colors">
-                  <Mail size={18} />
-                </div>
-                <input 
-                  type="email" 
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  placeholder="Email Address" 
-                  required
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl py-4 pl-12 pr-4 text-white text-sm focus:outline-none focus:border-[#C5A059] transition-all placeholder:text-gray-600 font-light"
-                />
-              </div>
-
-              {/* Password Field */}
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-[#C5A059] transition-colors">
-                  <Lock size={18} />
-                </div>
-                <input 
-                  type={showPassword ? "text" : "password"} 
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  placeholder="Password" 
-                  required
-                  className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl py-4 pl-12 pr-12 text-white text-sm focus:outline-none focus:border-[#C5A059] transition-all placeholder:text-gray-600 font-light"
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
-              </div>
-
-              {/* Forgot Password Link (Only on Login) */}
-              {isLogin && (
-                <div className="flex justify-end pt-1">
-                  <span className="text-[#C5A059] text-xs hover:text-white cursor-pointer transition-colors font-medium">
-                    Forgot your password?
-                  </span>
-                </div>
-              )}
-
-              {/* Submit Button */}
-              <button 
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-[#C5A059] text-black py-4 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-white transition-all shadow-[0_0_20px_rgba(197,160,89,0.2)] mt-4 flex items-center justify-center gap-2 group disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <>
-                    {isLogin ? "Access Portal" : "Create Profile"} 
-                    <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-              </button>
-
-            </form>
-          </div>
-          
-          <p className="text-center text-gray-500 text-xs mt-8">
-            By proceeding, you agree to Jamupet Transit's <br />
-            <span className="text-white hover:text-[#C5A059] cursor-pointer transition-colors">Terms of Service</span> and <span className="text-white hover:text-[#C5A059] cursor-pointer transition-colors">Privacy Policy</span>.
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-white text-sm opacity-50">
+            By continuing, you agree to our Terms of Service and Privacy Policy
           </p>
         </div>
       </div>
-    </div>
-  );
+    </section>
+  )
 }

@@ -100,6 +100,54 @@ export function useDatabase(tableName) {
     }
   }
 
+  // Specialized method for filtering queries
+  const filter = async (column, operator, value) => {
+    try {
+      setError(null)
+      setLoading(true)
+      let query = supabase.from(tableName).select('*')
+
+      if (operator === 'eq') query = query.eq(column, value)
+      else if (operator === 'neq') query = query.neq(column, value)
+      else if (operator === 'gt') query = query.gt(column, value)
+      else if (operator === 'gte') query = query.gte(column, value)
+      else if (operator === 'lt') query = query.lt(column, value)
+      else if (operator === 'lte') query = query.lte(column, value)
+      else if (operator === 'like') query = query.ilike(column, `%${value}%`)
+      else if (operator === 'in') query = query.in(column, value)
+
+      const { data, error: err } = await query
+
+      if (err) throw err
+      return data
+    } catch (err) {
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Specialized method for upserting (insert or update)
+  const upsert = async (records, onConflict = 'id') => {
+    try {
+      setError(null)
+      setLoading(true)
+      const { data, error: err } = await supabase
+        .from(tableName)
+        .upsert(records, { onConflict })
+        .select()
+
+      if (err) throw err
+      return data
+    } catch (err) {
+      setError(err.message)
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return {
     loading,
     error,
@@ -107,6 +155,9 @@ export function useDatabase(tableName) {
     insert,
     update,
     remove,
-    query
+    query,
+    filter,
+    upsert
   }
 }
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
 import ScrollToTop from "./components/ScrollToTop";
 import Preloader from "./components/Preloader";
 import Navbar from "./components/Navbar";
@@ -16,14 +17,16 @@ import AuthPage from './pages/AuthPage';
 import Destination from "./pages/Destination";
 import AboutPage from "./pages/AboutPage"; 
 import Services from './pages/Services';
+import AuthPage from "./pages/AuthPage";
+import BookingPage from "./pages/BookingPage";
+import MyBookingsPage from "./pages/MyBookingsPage";
+import ProfileSettingsPage from "./pages/ProfileSettingsPage";
+import AccountSettingsPage from "./pages/AccountSettingsPage";
 
 function App() {
-  // 1. Set up the loading state (defaults to true when they visit the site)
   const [isLoading, setIsLoading] = useState(true);
 
-  // 2. Start the timer when the app loads
   useEffect(() => {
-    // 2000 ms = 2 seconds. You can increase or decrease this!
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 2000);
@@ -32,48 +35,47 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <ScrollToTop />
-      
-      {/* 3. The Custom Loading Screen sits on top of everything */}
-      <Preloader isLoading={isLoading} />
-      
-      {/* 4. This wrapper prevents scrolling while the preloader is active */}
-      <div className={isLoading ? "h-screen overflow-hidden" : ""}>
+    <AuthProvider>
+      <Router>
+        <ScrollToTop />
         
-        {/* Navbar stays on top of every page */}
-        <div className="relative z-[1000]">
-          <Navbar />
+        <Preloader isLoading={isLoading} />
+        
+        <div className={isLoading ? "h-screen overflow-hidden" : ""}>
+          
+          <div className="relative z-[1000]">
+            <Navbar />
+          </div>
+          
+          <main className="relative z-0">
+            <Routes>
+              <Route path="/" element={
+                <>
+                  <Hero />
+                  <AboutTeaser />
+                  <Packages />
+                  <Features /> 
+                  <Deals />
+                  <CTA />
+                </>
+              } />
+
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/services" element={<Services />} />
+              <Route path="/destinations" element={<Destination />} />
+              <Route path="/auth" element={<AuthPage />} />
+              <Route path="/booking" element={<BookingPage />} />
+              <Route path="/bookings" element={<MyBookingsPage />} />
+              <Route path="/profile" element={<ProfileSettingsPage />} />
+              <Route path="/settings" element={<AccountSettingsPage />} />
+            </Routes>
+          </main>
+
+          <Footer />
+          
         </div>
-        
-        <main className="relative z-0">
-          <Routes>
-            {/* THE HOME ROUTE: Combines all your landing page sections */}
-            <Route path="/" element={
-              <>
-                <Hero />
-                <AboutTeaser />
-                <Packages />
-                <Features /> 
-                {/*<Deals />*/}
-                <CTA />
-              </>
-            } />
-
-            {/* MULTI-PAGE ROUTES: These show individual pages */}
-            <Route path="/auth" element={<AuthPage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/services" element={<Services />} />
-            <Route path="/destinations" element={<Destination />} />
-            <Route path="/booking" element={<BookingForm />} />
-          </Routes>
-        </main>
-
-        {/* Footer stays at the bottom of every page */}
-        <Footer />
-        
-      </div>
-    </Router>
+      </Router>
+    </AuthProvider>
   );
 }
 

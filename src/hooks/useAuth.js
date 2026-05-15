@@ -86,6 +86,75 @@ export function useAuth() {
     }
   }
 
+  const signInWithGoogle = async () => {
+    try {
+      setError(null)
+      const { data, error } = await supabaseAuth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`
+        }
+      })
+      if (error) throw error
+      return { success: true, data }
+    } catch (err) {
+      setError(err.message)
+      return { success: false, error: err }
+    }
+  }
+
+  const signInWithApple = async () => {
+    try {
+      setError(null)
+      const { data, error } = await supabaseAuth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: `${window.location.origin}/`
+        }
+      })
+      if (error) throw error
+      return { success: true, data }
+    } catch (err) {
+      setError(err.message)
+      return { success: false, error: err }
+    }
+  }
+
+  const signUpAnonymous = async () => {
+    try {
+      setError(null)
+      // Create a temporary anonymous user with valid email format
+      const tempEmail = `guest${Date.now()}@guest.roamkenya.com`
+      const tempPassword = Math.random().toString(36).slice(-12)
+      
+      const { data, error } = await supabaseAuth.signUp({
+        email: tempEmail,
+        password: tempPassword,
+        options: {
+          data: {
+            is_anonymous: true,
+            full_name: 'Guest User'
+          }
+        }
+      })
+      
+      if (error) throw error
+      
+      // Auto sign in the anonymous user
+      const { error: signInError } = await supabaseAuth.signInWithPassword({
+        email: tempEmail,
+        password: tempPassword
+      })
+      
+      if (signInError) throw signInError
+      
+      return { success: true, data }
+    } catch (err) {
+      setError(err.message)
+      return { success: false, error: err }
+    }
+  }
+
   return {
     user,
     loading,
@@ -93,6 +162,9 @@ export function useAuth() {
     signUp,
     signIn,
     signOut,
-    resetPassword
+    resetPassword,
+    signInWithGoogle,
+    signInWithApple,
+    signUpAnonymous
   }
 }
