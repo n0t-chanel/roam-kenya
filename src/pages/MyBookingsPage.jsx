@@ -3,7 +3,13 @@ import { Link } from "react-router-dom";
 import { Calendar, Clock, Car, MapPin, Loader, Pencil, Save, X, Ban, RotateCcw } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useAuthContext } from "../context/AuthContext";
-import { formatKesFromCents } from "../lib/paystack";
+import {
+  createPaymentReference,
+  formatKesFromCents,
+  startPaystackCheckout
+} from "../lib/paystack";
+import { verifyPaymentServerSide } from "../lib/paymentVerification";
+import { sendBookingEmail } from "../lib/emailService";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -34,6 +40,8 @@ export default function MyBookingsPage() {
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [savingBookingId, setSavingBookingId] = useState(null);
   const [processingRefundBookingId, setProcessingRefundBookingId] = useState(null);
+  const [processingFinalPaymentBookingId, setProcessingFinalPaymentBookingId] = useState(null);
+  const [retryingVerificationBookingId, setRetryingVerificationBookingId] = useState(null);
   const [editForm, setEditForm] = useState({
     pickup_location: "",
     destination_location: "",
@@ -106,7 +114,7 @@ export default function MyBookingsPage() {
     () =>
       bookings.filter(
         (booking) =>
-          booking.payment_status === "paid" &&
+          (booking.payment_status === "reservation_paid" || booking.payment_status === "paid") &&
           booking.status !== "cancelled" &&
           booking.reservation_paid_at &&
           new Date().getTime() - new Date(booking.reservation_paid_at).getTime() <= ONE_DAY_MS
@@ -275,6 +283,127 @@ export default function MyBookingsPage() {
     }
   };
 
+  const retryReservationVerification = async (booking) => {
+    if (!booking.reservation_reference) {
+      setActionMessage({ type: "error", message: "No reservation payment reference found." });
+      return;
+    }
+    setRetryingVerificationBookingId(booking.id);
+    setActionMessage(null);
+    try {
+      const result = await verifyPaymentServerSide(supabase, {
+        reference: booking.reservation_reference,
+        bookingId: booking.id,
+        expectedAmount: booking.price_amount || 0,
+        paymentStage: "reservation"
+      });
+      if (!result?.success) throw new Error(result?.error || "Verification failed.");
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === booking.id ? { ...b, payment_status: "reservation_paid", status: "confirmed" } : b
+        )
+      );
+      setActionMessage({ type: "success", message: "Reservation payment verified successfully." });
+    } catch (err) {
+      setActionMessage({ type: "error", message: `Unable to verify reservation payment: ${err.message}` });
+    } finally {
+      setRetryingVerificationBookingId(null);
+    }
+  };
+
+  const processFinalPayment = async (booking) => {
+    const totalPrice = Number(booking.total_price || 0);
+    const reservationFee = Number(booking.price_amount || 0);
+    const balanceDue = Math.max(totalPrice - reservationFee, 0);
+
+    if (balanceDue <= 0) {
+      setActionMessage({ type: "error", message: "No outstanding final payment for this booking." });
+      return;
+    }
+
+    setProcessingFinalPaymentBookingId(booking.id);
+    setActionMessage(null);
+
+    const reference = createPaymentReference(`${booking.id}_final`);
+    try {
+      const { error: insertError } = await supabase.from("payments").insert({
+        booking_id: booking.id,
+        user_id: user.id,
+        amount: balanceDue,
+        payment_method: "paystack_final",
+        reference,
+        status: "pending",
+        paystack_response: null
+      });
+
+      if (insertError) throw insertError;
+
+      startPaystackCheckout({
+        email: user.email,
+        amount: balanceDue,
+        reference,
+        metadata: {
+          bookingId: booking.id,
+          userId: user.id,
+          paymentStage: "final"
+        },
+        onSuccess: async (transaction) => {
+          try {
+            const result = await verifyPaymentServerSide(supabase, {
+              reference,
+              bookingId: booking.id,
+              expectedAmount: balanceDue,
+              paymentStage: "final",
+              checkoutResponse: transaction
+            });
+            if (!result?.success) throw new Error(result?.error || "Final payment verification failed.");
+
+            setBookings((prev) =>
+              prev.map((b) => (b.id === booking.id ? { ...b, payment_status: "paid", status: "confirmed" } : b))
+            );
+            setActionMessage({
+              type: "success",
+              message: "Trip confirmed and final payment completed successfully."
+            });
+
+            try {
+              await sendBookingEmail({
+                bookingId: booking.id,
+                userEmail: user.email,
+                userName: user.user_metadata?.full_name || user.email,
+                pickupLocation: booking.pickup_location,
+                destinationLocation: booking.destination_location,
+                pickupDate: booking.booking_date,
+                pickupTime: booking.pickup_time,
+                passengers: booking.passengers,
+                vehicleType: booking.vehicle_type,
+                serviceType: `${booking.service_category || "Trip"} (Fully Paid & Confirmed)`
+              });
+            } catch (emailErr) {
+              console.error("Final payment confirmation email failed:", emailErr);
+            }
+          } catch (err) {
+            setActionMessage({ type: "error", message: `Final payment completed but verification failed: ${err.message}` });
+          } finally {
+            setProcessingFinalPaymentBookingId(null);
+          }
+        },
+        onCancel: async () => {
+          await supabase
+            .from("payments")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("reference", reference)
+            .eq("user_id", user.id);
+          setActionMessage({ type: "error", message: "Final payment was cancelled." });
+          setProcessingFinalPaymentBookingId(null);
+        }
+      });
+    } catch (err) {
+      setActionMessage({ type: "error", message: `Unable to start final payment: ${err.message}` });
+      setProcessingFinalPaymentBookingId(null);
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-white pt-32 pb-20 px-6">
@@ -344,6 +473,8 @@ export default function MyBookingsPage() {
                       className={`px-3 py-1 text-sm font-semibold border uppercase ${
                         booking.payment_status === "paid"
                           ? "border-green-300 bg-green-100 text-green-700"
+                          : booking.payment_status === "reservation_paid"
+                            ? "border-blue-300 bg-blue-100 text-blue-700"
                           : "border-yellow-300 bg-yellow-100 text-yellow-700"
                       }`}
                     >
@@ -461,13 +592,28 @@ export default function MyBookingsPage() {
                         {booking.price_amount ? formatKesFromCents(booking.price_amount) : "Not paid"}
                       </p>
                     </div>
+                    <div>
+                      <p className="text-gray-500">Total Trip Price</p>
+                      <p className="font-semibold text-gray-900">
+                        {booking.total_price ? formatKesFromCents(Number(booking.total_price)) : "Pending"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Outstanding Balance</p>
+                      <p className="font-semibold text-gray-900">
+                        {booking.total_price && booking.price_amount
+                          ? formatKesFromCents(Math.max(Number(booking.total_price) - Number(booking.price_amount), 0))
+                          : "Pending"}
+                      </p>
+                    </div>
                     {booking.reservation_reference && (
                       <div>
                         <p className="text-gray-500">Payment Reference</p>
                         <p className="font-semibold text-gray-900 break-all">{booking.reservation_reference}</p>
                       </div>
                     )}
-                    {booking.status === "cancelled" && booking.payment_status === "paid" && (
+                    {booking.status === "cancelled" &&
+                      (booking.payment_status === "reservation_paid" || booking.payment_status === "paid") && (
                       <>
                         <div>
                           <p className="text-gray-500">Refund Status</p>
@@ -531,7 +677,38 @@ export default function MyBookingsPage() {
                           Revise booking
                         </button>
                       )}
-                      {booking.payment_status === "paid" && booking.status !== "cancelled" && (
+                      {booking.payment_status === "reservation_paid" && booking.status !== "cancelled" && (
+                        <button
+                          type="button"
+                          disabled={processingFinalPaymentBookingId === booking.id}
+                          onClick={() => processFinalPayment(booking)}
+                          className="inline-flex items-center gap-2 px-4 py-2 border border-green-500 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+                        >
+                          {processingFinalPaymentBookingId === booking.id ? (
+                            <Loader size={14} className="animate-spin" />
+                          ) : (
+                            <Car size={14} />
+                          )}
+                          Confirm Trip & Pay Balance
+                        </button>
+                      )}
+                      {booking.payment_status === "unpaid" && booking.reservation_reference && booking.status !== "cancelled" && (
+                        <button
+                          type="button"
+                          disabled={retryingVerificationBookingId === booking.id}
+                          onClick={() => retryReservationVerification(booking)}
+                          className="inline-flex items-center gap-2 px-4 py-2 border border-[#B35A38] text-sm font-semibold text-[#B35A38] hover:bg-[#B35A38]/10 disabled:opacity-50"
+                        >
+                          {retryingVerificationBookingId === booking.id ? (
+                            <Loader size={14} className="animate-spin" />
+                          ) : (
+                            <RotateCcw size={14} />
+                          )}
+                          Retry Verification
+                        </button>
+                      )}
+                      {booking.payment_status === "reservation_paid" &&
+                        booking.status !== "cancelled" && (
                         <button
                           type="button"
                           disabled={savingBookingId === booking.id}

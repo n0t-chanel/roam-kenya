@@ -113,29 +113,33 @@ export default function AuthPage() {
   return (
     <section className="min-h-screen bg-gradient-to-br from-[#1A1A1A] via-[#2a2a2a] to-[#B35A38] flex items-center justify-center px-6 py-20">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-gray-100">
-          
+        <div className="relative bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 shadow-2xl overflow-hidden p-8">
+
+          {/* Decorative blurs */}
+          <div className="absolute top-0 right-0 w-40 h-40 bg-[#B35A38]/20 rounded-full blur-3xl -z-10" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-[#C5A059]/20 rounded-full blur-3xl -z-10" />
+
           {/* Header */}
-          <div className="bg-[#1A1A1A] p-8 text-white text-center">
+          <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <div className="w-12 h-12 bg-[#B35A38] rounded-full flex items-center justify-center font-bold text-xl">
+              <div className="w-12 h-12 bg-[#B35A38] rounded-full flex items-center justify-center font-bold text-xl text-white shadow-lg shadow-[#B35A38]/30">
                 R
               </div>
             </div>
-            <h1 className="text-3xl font-bold mb-2">Roam Kenya</h1>
-            <p className="text-gray-400 text-sm">
+            <h1 className="text-3xl font-bold text-white mb-2">Roam Kenya</h1>
+            <p className="text-white/60 text-sm">
               {isSignUp ? 'Create your account' : 'Welcome back'}
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="p-8 space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             
             {/* OAuth Error Alert */}
             {oauthError && (
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
-                <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-red-700 text-sm">{oauthError}</p>
+              <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 flex items-start gap-3">
+                <AlertCircle size={18} className="text-red-300 flex-shrink-0 mt-0.5" />
+                <p className="text-red-200 text-sm">{oauthError}</p>
               </div>
             )}
 
@@ -145,42 +149,46 @@ export default function AuthPage() {
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={oauthLoading || isSubmitting || loading}
-                className="w-full bg-white hover:bg-gray-50 text-gray-800 font-semibold py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 border-2 border-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full group relative overflow-hidden rounded-2xl p-3.5 transition-all duration-300 bg-white/10 hover:bg-white/20 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Chrome size={20} className="text-[#4285F4]" />
-                <span>Continue with Google</span>
+                <div className="flex items-center justify-center gap-3">
+                  <Chrome size={20} className="text-[#4285F4]" />
+                  <span className="text-white font-semibold text-sm">Continue with Google</span>
+                </div>
               </button>
 
               <button
                 type="button"
                 onClick={handleAppleLogin}
                 disabled={oauthLoading || isSubmitting || loading}
-                className="w-full bg-black hover:bg-gray-900 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full group relative overflow-hidden rounded-2xl p-3.5 transition-all duration-300 bg-white/10 hover:bg-white/20 border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Apple size={20} />
-                <span>Continue with Apple</span>
+                <div className="flex items-center justify-center gap-3">
+                  <Apple size={20} className="text-white" />
+                  <span className="text-white font-semibold text-sm">Continue with Apple</span>
+                </div>
               </button>
             </div>
 
             {/* Divider */}
-            <div className="flex items-center gap-4 my-6">
-              <div className="flex-1 h-px bg-gray-200" />
-              <span className="text-gray-400 text-xs font-semibold">OR</span>
-              <div className="flex-1 h-px bg-gray-200" />
+            <div className="flex items-center gap-4">
+              <div className="flex-1 h-px bg-white/20" />
+              <span className="text-white/60 text-xs font-semibold">OR</span>
+              <div className="flex-1 h-px bg-white/20" />
             </div>
 
-            {/* Error Alert */}
+            {/* Auth Error Alert */}
             {authError && (
-              <div className="p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
-                <AlertCircle size={20} className="text-red-600 flex-shrink-0 mt-0.5" />
-                <p className="text-red-700 text-sm">{authError}</p>
+              <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/30 flex items-start gap-3">
+                <AlertCircle size={18} className="text-red-300 flex-shrink-0 mt-0.5" />
+                <p className="text-red-200 text-sm">{authError}</p>
               </div>
             )}
 
             {/* Full Name (Sign Up Only) */}
             {isSignUp && (
               <div>
-                <label className="flex items-center gap-2 text-xs font-bold uppercase text-gray-600 mb-3 ml-1">
+                <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
                   <User size={14} /> Full Name
                 </label>
                 <input
@@ -189,19 +197,19 @@ export default function AuthPage() {
                   value={formData.fullName}
                   onChange={handleChange}
                   placeholder="John Doe"
-                  className={`w-full p-4 bg-gray-50 rounded-xl border-2 focus:bg-white transition-all outline-none text-gray-800 font-medium ${
-                    formErrors.fullName ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-[#B35A38]'
+                  className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                    formErrors.fullName ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
                   }`}
                 />
                 {formErrors.fullName && (
-                  <p className="text-red-500 text-xs mt-2 ml-1">{formErrors.fullName}</p>
+                  <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.fullName}</p>
                 )}
               </div>
             )}
 
             {/* Email */}
             <div>
-              <label className="flex items-center gap-2 text-xs font-bold uppercase text-gray-600 mb-3 ml-1">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
                 <Mail size={14} /> Email Address
               </label>
               <input
@@ -210,18 +218,18 @@ export default function AuthPage() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="you@example.com"
-                className={`w-full p-4 bg-gray-50 rounded-xl border-2 focus:bg-white transition-all outline-none text-gray-800 font-medium ${
-                  formErrors.email ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-[#B35A38]'
+                className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                  formErrors.email ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
                 }`}
               />
               {formErrors.email && (
-                <p className="text-red-500 text-xs mt-2 ml-1">{formErrors.email}</p>
+                <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.email}</p>
               )}
             </div>
 
             {/* Password */}
             <div>
-              <label className="flex items-center gap-2 text-xs font-bold uppercase text-gray-600 mb-3 ml-1">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
                 <Lock size={14} /> Password
               </label>
               <input
@@ -230,19 +238,19 @@ export default function AuthPage() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
-                className={`w-full p-4 bg-gray-50 rounded-xl border-2 focus:bg-white transition-all outline-none text-gray-800 font-medium ${
-                  formErrors.password ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-[#B35A38]'
+                className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                  formErrors.password ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
                 }`}
               />
               {formErrors.password && (
-                <p className="text-red-500 text-xs mt-2 ml-1">{formErrors.password}</p>
+                <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.password}</p>
               )}
             </div>
 
             {/* Confirm Password (Sign Up Only) */}
             {isSignUp && (
               <div>
-                <label className="flex items-center gap-2 text-xs font-bold uppercase text-gray-600 mb-3 ml-1">
+                <label className="flex items-center gap-2 text-xs font-bold uppercase text-white/60 mb-2 ml-1">
                   <Lock size={14} /> Confirm Password
                 </label>
                 <input
@@ -251,12 +259,12 @@ export default function AuthPage() {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   placeholder="••••••••"
-                  className={`w-full p-4 bg-gray-50 rounded-xl border-2 focus:bg-white transition-all outline-none text-gray-800 font-medium ${
-                    formErrors.confirmPassword ? 'border-red-500 focus:border-red-500' : 'border-transparent focus:border-[#B35A38]'
+                  className={`w-full p-4 bg-white/10 rounded-xl border transition-all outline-none text-white font-medium placeholder-white/40 ${
+                    formErrors.confirmPassword ? 'border-red-500' : 'border-white/20 focus:border-[#C5A059]'
                   }`}
                 />
                 {formErrors.confirmPassword && (
-                  <p className="text-red-500 text-xs mt-2 ml-1">{formErrors.confirmPassword}</p>
+                  <p className="text-red-300 text-xs mt-2 ml-1">{formErrors.confirmPassword}</p>
                 )}
               </div>
             )}
@@ -265,7 +273,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={isSubmitting || loading}
-              className="w-full bg-[#B35A38] hover:bg-[#a04a2a] text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-8"
+              className="w-full bg-[#B35A38] hover:bg-[#a04a2a] text-white font-bold py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed mt-6 shadow-lg shadow-[#B35A38]/20"
             >
               {isSubmitting || loading ? (
                 <>
@@ -278,8 +286,8 @@ export default function AuthPage() {
             </button>
 
             {/* Toggle Auth Mode */}
-            <div className="text-center pt-4 border-t border-gray-200">
-              <p className="text-gray-600 text-sm">
+            <div className="text-center pt-4 border-t border-white/10">
+              <p className="text-white/60 text-sm">
                 {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
                 <button
                   type="button"
@@ -288,7 +296,7 @@ export default function AuthPage() {
                     setFormData({ email: '', password: '', fullName: '', confirmPassword: '' })
                     setFormErrors({})
                   }}
-                  className="text-[#B35A38] font-bold hover:underline"
+                  className="text-[#C5A059] font-bold hover:underline"
                 >
                   {isSignUp ? 'Sign In' : 'Sign Up'}
                 </button>
@@ -299,7 +307,7 @@ export default function AuthPage() {
 
         {/* Footer */}
         <div className="text-center mt-8">
-          <p className="text-white text-sm opacity-75">
+          <p className="text-white text-sm opacity-50">
             By continuing, you agree to our Terms of Service and Privacy Policy
           </p>
         </div>

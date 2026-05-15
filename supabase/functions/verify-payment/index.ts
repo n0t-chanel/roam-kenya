@@ -22,7 +22,8 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const supabaseServiceRoleKey =
+      Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const paystackSecretKey = Deno.env.get("PAYSTACK_SECRET_KEY");
 
     if (!supabaseUrl || !supabaseServiceRoleKey || !paystackSecretKey) {
@@ -58,6 +59,7 @@ serve(async (req) => {
     const reference = String(body?.reference || "").trim();
     const bookingId = String(body?.bookingId || "").trim();
     const expectedAmount = Number(body?.expectedAmount || 0);
+    const requestedStage = String(body?.paymentStage || "").trim();
 
     if (!reference || !bookingId) {
       return new Response(
@@ -97,6 +99,9 @@ serve(async (req) => {
     }
 
     const metadataBookingId = String(transaction?.metadata?.bookingId || bookingId).trim();
+    const paymentStage = String(
+      requestedStage || transaction?.metadata?.paymentStage || "reservation"
+    ).trim();
     if (metadataBookingId !== bookingId) {
       return new Response(
         JSON.stringify({ success: false, error: "Booking mismatch in payment metadata." }),
@@ -136,7 +141,7 @@ serve(async (req) => {
           booking_id: bookingId,
           user_id: userId,
           amount: paidAmount,
-          payment_method: transaction.channel || "paystack",
+          payment_method: `${transaction.channel || "paystack"}_${paymentStage}`,
           reference,
           status: "completed",
           paystack_response: verifyPayload,
@@ -152,14 +157,21 @@ serve(async (req) => {
       );
     }
 
+    const bookingUpdatePayload: Record<string, unknown> = {
+      status: "confirmed",
+      updated_at: new Date().toISOString()
+    };
+
+    if (paymentStage === "final") {
+      bookingUpdatePayload.payment_status = "paid";
+    } else {
+      bookingUpdatePayload.payment_status = "reservation_paid";
+      bookingUpdatePayload.price_amount = paidAmount;
+    }
+
     const { error: bookingUpdateError } = await supabaseAdmin
       .from("bookings")
-      .update({
-        payment_status: "paid",
-        price_amount: paidAmount,
-        status: "confirmed",
-        updated_at: new Date().toISOString()
-      })
+      .update(bookingUpdatePayload)
       .eq("id", bookingId)
       .eq("user_id", userId);
 
@@ -173,7 +185,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Payment verified and booking reserved successfully.",
+        message:
+          paymentStage === "final"
+            ? "Final trip payment verified successfully."
+            : "Reservation payment verified successfully.",
         reference,
         bookingId
       }),

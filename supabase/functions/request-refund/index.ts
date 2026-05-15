@@ -80,7 +80,10 @@ serve(async (req) => {
       });
     }
 
-    if (booking.status !== "cancelled" || booking.payment_status !== "paid") {
+    if (
+      booking.status !== "cancelled" ||
+      (booking.payment_status !== "reservation_paid" && booking.payment_status !== "paid")
+    ) {
       return new Response(
         JSON.stringify({
           success: false,
