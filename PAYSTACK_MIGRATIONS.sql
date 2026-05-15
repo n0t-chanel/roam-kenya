@@ -9,10 +9,10 @@ CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID NOT NULL REFERENCES public.bookings(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  amount INTEGER NOT NULL COMMENT 'Amount in KES cents (e.g., 150000 = KES 1,500)',
+  amount INTEGER NOT NULL,
   payment_method VARCHAR(50),
   reference VARCHAR(100) UNIQUE NOT NULL,
-  status VARCHAR(20) DEFAULT 'pending' COMMENT 'pending, completed, failed, cancelled',
+  status VARCHAR(20) DEFAULT 'pending',
   paystack_response JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
@@ -30,11 +30,18 @@ CREATE INDEX IF NOT EXISTS idx_payments_created_at ON public.payments(created_at
 -- ============================================
 
 -- Add payment tracking columns to bookings table
-ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'unpaid' COMMENT 'unpaid, paid';
-ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS price_amount INTEGER COMMENT 'Price in KES cents (e.g., 150000 = KES 1,500)';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'unpaid';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS price_amount INTEGER;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_status VARCHAR(20) DEFAULT 'none';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_eligible_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_due_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS refund_reference VARCHAR(100);
 
 -- Create index for payment status
 CREATE INDEX IF NOT EXISTS idx_bookings_payment_status ON public.bookings(payment_status);
+CREATE INDEX IF NOT EXISTS idx_bookings_refund_status ON public.bookings(refund_status);
 
 -- ============================================
 -- 3. ROW LEVEL SECURITY (RLS)
@@ -72,7 +79,9 @@ CREATE POLICY "Service role can update payments"
 -- Run these queries to verify everything is set up correctly:
 SELECT * FROM information_schema.tables WHERE table_name = 'payments';
 SELECT * FROM information_schema.columns WHERE table_name = 'payments';
-DESC public.payments;
+SELECT column_name, data_type
+FROM information_schema.columns
+WHERE table_schema = 'public' AND table_name = 'payments';
 
 -- ============================================
 -- 5. TEST DATA (Optional - for development)

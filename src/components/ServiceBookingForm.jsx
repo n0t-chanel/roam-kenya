@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from "react";
-import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, Truck } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, Truck, CreditCard } from "lucide-react";
 import { useDatabase } from "../hooks/useDatabase";
 import { useAuthContext } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { sendBookingEmail } from "../lib/emailService";
+import {
+  createPaymentReference,
+  formatKesFromCents,
+  getReservationAmount,
+  startPaystackCheckout
+} from "../lib/paystack";
 
 export default function ServiceBookingForm({ serviceType, onBack }) {
   const { user } = useAuthContext();
   const bookingsDb = useDatabase('bookings');
   const [bookingId, setBookingId] = useState(null);
   const [activeBooking, setActiveBooking] = useState(null);
+  const [isPaying, setIsPaying] = useState(false);
+  const [paymentFeedback, setPaymentFeedback] = useState(null);
 
   // Service icons mapping
   const serviceIcons = {
@@ -271,27 +279,6 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
         }
       }
 
-      // Send booking confirmation email
-      try {
-        console.log("📧 Sending booking confirmation email...");
-        await sendBookingEmail({
-          bookingId: bid,
-          userEmail: user.email,
-          userName: user.user_metadata?.full_name || user.email,
-          pickupLocation: bookingPayload.pickup_location,
-          destinationLocation: bookingPayload.destination_location,
-          pickupDate: bookingPayload.booking_date,
-          pickupTime: bookingPayload.pickup_time,
-          passengers: bookingPayload.passengers,
-          vehicleType: bookingPayload.vehicle_type,
-          flightNumber: bookingPayload.flight_number || undefined,
-          serviceType: config.label
-        });
-        console.log("✅ Email sent successfully");
-      } catch (emailErr) {
-        console.error("Email sending error:", emailErr);
-      }
-
       // Send WhatsApp confirmation as backup
       try {
         console.log("💬 Sending WhatsApp confirmation...");
@@ -315,9 +302,10 @@ Thank you for booking with us!
         console.error("WhatsApp sending error:", whatsappErr);
       }
 
+      const reservationAmount = getReservationAmount(config.label);
       setSubmitStatus({
         type: "success",
-        message: `${config.label} booking confirmed. Confirmation sent to email and WhatsApp.`
+        message: `${config.label} booking confirmed. Proceed to payment to reserve this booking.`
       });
       setActiveBooking({
         id: bid,
@@ -330,7 +318,10 @@ Thank you for booking with us!
         vehicleType: bookingPayload.vehicle_type,
         phoneNumber,
         status: "Active",
-        flightNumber: bookingPayload.flight_number || null
+        flightNumber: bookingPayload.flight_number || null,
+        paymentStatus: "unpaid",
+        reservationAmount,
+        paymentReference: null
       });
     } catch (err) {
       console.error("Booking error:", err);
@@ -354,6 +345,192 @@ Thank you for booking with us!
     setSubmitStatus(null);
     setActiveBooking(null);
     setBookingId(null);
+    setPaymentFeedback(null);
+    setIsPaying(false);
+  };
+
+  const verifyPaymentServerSide = async (payload) => {
+    const invokeResult = await supabase.functions.invoke("verify-payment", {
+      body: payload
+    });
+
+    if (!invokeResult.error && invokeResult.data) {
+      return invokeResult.data;
+    }
+
+    const invokeErrorMessage = invokeResult.error?.message || "";
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error(
+        `${invokeErrorMessage} Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY for fallback verification.`
+      );
+    }
+
+    const {
+      data: { session }
+    } = await supabase.auth.getSession();
+
+    const response = await fetch(`${supabaseUrl}/functions/v1/verify-payment`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: supabaseAnonKey,
+        Authorization: session?.access_token ? `Bearer ${session.access_token}` : ""
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const fallbackData = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        fallbackData?.error ||
+          fallbackData?.message ||
+          `${invokeErrorMessage} Failed to send a request to the Edge Function`
+      );
+    }
+
+    return fallbackData;
+  };
+
+  const handleReserveBookingPayment = async () => {
+    if (!activeBooking?.id || !user?.id) {
+      setPaymentFeedback({
+        type: "error",
+        message: "Missing booking session. Please create your booking again."
+      });
+      return;
+    }
+
+    setIsPaying(true);
+    setPaymentFeedback(null);
+
+    const reference = createPaymentReference(activeBooking.id);
+    const amount = activeBooking.reservationAmount;
+
+    try {
+      const { error: insertError } = await supabase
+        .from("payments")
+        .insert({
+          booking_id: activeBooking.id,
+          user_id: user.id,
+          amount,
+          payment_method: "paystack",
+          reference,
+          status: "pending",
+          paystack_response: null
+        });
+
+      if (insertError) {
+        throw new Error(
+          insertError.message.includes("payments")
+            ? "Payments table is not ready. Run PAYSTACK_MIGRATIONS.sql in Supabase, then retry."
+            : insertError.message
+        );
+      }
+
+      startPaystackCheckout({
+        email: user.email,
+        amount,
+        reference,
+        metadata: {
+          bookingId: activeBooking.id,
+          userId: user.id,
+          service: activeBooking.service
+        },
+        onSuccess: async (transaction) => {
+          try {
+            const verifyResult = await verifyPaymentServerSide({
+              reference,
+              bookingId: activeBooking.id,
+              expectedAmount: amount,
+              checkoutResponse: transaction
+            });
+
+            if (!verifyResult?.success) {
+              throw new Error(verifyResult?.error || "Payment verification failed.");
+            }
+
+            setActiveBooking((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    paymentStatus: "paid",
+                    paymentReference: reference
+                  }
+                : prev
+            );
+            setPaymentFeedback({
+              type: "success",
+              message:
+                verifyResult?.message ||
+                `Payment verified successfully. Reference: ${reference}. You can cancel this reservation within 24 hours.`
+            });
+
+            try {
+              await sendBookingEmail({
+                bookingId: activeBooking.id,
+                userEmail: user.email,
+                userName: user.user_metadata?.full_name || user.email,
+                pickupLocation: activeBooking.pickupLocation,
+                destinationLocation: activeBooking.destinationLocation,
+                pickupDate: activeBooking.date,
+                pickupTime: activeBooking.time,
+                passengers: activeBooking.passengers,
+                vehicleType: activeBooking.vehicleType,
+                flightNumber: activeBooking.flightNumber || undefined,
+                serviceType: `${activeBooking.service} (Reserved & Paid)`,
+                reservationNotice:
+                  "Reservation confirmed. You can cancel your reservation within 24 hours from payment time."
+              });
+            } catch (emailErr) {
+              console.error("Reservation email sending error:", emailErr);
+            }
+          } catch (verifyErr) {
+            await supabase
+              .from("payments")
+              .update({
+                paystack_response: transaction,
+                updated_at: new Date().toISOString()
+              })
+              .eq("reference", reference)
+              .eq("user_id", user.id);
+
+            setPaymentFeedback({
+              type: "error",
+              message: `Payment completed but verification failed: ${verifyErr.message}. Deploy 'verify-payment' function and set PAYSTACK_SECRET_KEY in Supabase secrets, then retry verification.`
+            });
+          } finally {
+            setIsPaying(false);
+          }
+        },
+        onCancel: async () => {
+          try {
+            await supabase
+              .from("payments")
+              .update({
+                status: "cancelled",
+                updated_at: new Date().toISOString()
+              })
+              .eq("reference", reference)
+              .eq("user_id", user.id);
+          } finally {
+            setPaymentFeedback({
+              type: "error",
+              message: "Payment was cancelled. Your booking remains unpaid."
+            });
+            setIsPaying(false);
+          }
+        }
+      });
+    } catch (err) {
+      setPaymentFeedback({
+        type: "error",
+        message: err.message
+      });
+      setIsPaying(false);
+    }
   };
 
   return (
@@ -623,6 +800,56 @@ Thank you for booking with us!
                   )}
                 </div>
               </div>
+            </section>
+
+            <section className="bg-white border border-gray-300 p-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">Reserve Booking Payment</h2>
+              <div className="border border-gray-200 bg-gray-50 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-gray-600">Reservation Fee</p>
+                  <p className="text-xl font-bold text-gray-900">{formatKesFromCents(activeBooking?.reservationAmount || 0)}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-gray-600">Payment Status</p>
+                  <span
+                    className={`px-3 py-1 text-xs font-semibold border uppercase ${
+                      activeBooking?.paymentStatus === "paid"
+                        ? "bg-green-100 text-green-700 border-green-300"
+                        : "bg-yellow-100 text-yellow-700 border-yellow-300"
+                    }`}
+                  >
+                    {activeBooking?.paymentStatus || "unpaid"}
+                  </span>
+                </div>
+                {activeBooking?.paymentReference && (
+                  <div>
+                    <p className="text-gray-500 text-sm">Reference</p>
+                    <p className="font-semibold text-gray-900 break-all">{activeBooking.paymentReference}</p>
+                  </div>
+                )}
+              </div>
+
+              {paymentFeedback && (
+                <div
+                  className={`p-4 mt-4 border ${
+                    paymentFeedback.type === "success"
+                      ? "bg-green-50 border-green-400 text-green-700"
+                      : "bg-red-50 border-red-400 text-red-700"
+                  }`}
+                >
+                  {paymentFeedback.message}
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={isPaying || activeBooking?.paymentStatus === "paid"}
+                onClick={handleReserveBookingPayment}
+                className="mt-5 inline-flex items-center gap-2 px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isPaying ? <Loader size={18} className="animate-spin" /> : <CreditCard size={18} />}
+                {activeBooking?.paymentStatus === "paid" ? "Reservation Paid" : "Pay with Paystack"}
+              </button>
             </section>
 
             <div className="flex flex-col md:flex-row gap-3">
