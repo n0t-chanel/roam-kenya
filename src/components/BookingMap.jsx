@@ -303,7 +303,7 @@ export default function BookingMap({
 
   if (!MAPBOX_TOKEN) {
     return (
-      <div className="relative w-full h-full min-h-[300px] rounded-2xl overflow-hidden border border-gray-200 bg-gray-950 text-white shadow-lg flex items-center justify-center p-6">
+      <div className="booking-portal-enter relative w-full h-full min-h-[300px] rounded-xl overflow-hidden border border-gray-200 bg-gray-950 text-white shadow-[0_12px_34px_rgba(15,23,42,0.08)] flex items-center justify-center p-6">
         <div className="max-w-xs text-center">
           <p className="text-sm font-bold">Mapbox token missing</p>
           <p className="text-xs text-white/70 mt-2">Add VITE_MAPBOX_ACCESS_TOKEN to enable precise location picking.</p>
@@ -313,16 +313,16 @@ export default function BookingMap({
   }
 
   return (
-    <div className="relative w-full h-full min-h-[300px] rounded-2xl overflow-hidden border border-gray-200 shadow-lg bg-gray-900">
+    <div className="booking-portal-enter relative w-full h-full min-h-[300px] rounded-xl overflow-hidden border border-gray-200 shadow-[0_12px_34px_rgba(15,23,42,0.08)] bg-gray-900">
       <div ref={mapContainerRef} className="absolute inset-0" />
 
       <div className="absolute top-3 left-3 z-10 flex flex-wrap items-center gap-2">
-        <div className="bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-md border border-gray-100 flex items-center gap-2">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg px-3 py-1.5 shadow-[0_8px_18px_rgba(15,23,42,0.08)] border border-gray-100 flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${pickupCoords && (destinationCoords || !hasDestination) ? "bg-green-500" : "bg-amber-500"}`} />
           <span className="text-[11px] font-semibold text-gray-700">{statusLabel}</span>
         </div>
 
-        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-md border border-gray-100 overflow-hidden flex">
+        <div className="bg-white/95 backdrop-blur-sm rounded-lg shadow-[0_8px_18px_rgba(15,23,42,0.08)] border border-gray-100 overflow-hidden flex">
           {pickupField && (
             <button
               type="button"

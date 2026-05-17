@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { X, LogIn, UserPlus, Ghost, Chrome, Facebook, Mail, Lock, User, AlertCircle, Loader, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
@@ -138,18 +139,22 @@ export default function LoginModal({ isOpen, onClose }) {
       formErrors[fieldName] ? "border-red-500" : "border-white/20 focus:border-[#C5A059]"
     }`;
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[3999] bg-black/30 backdrop-blur-sm"
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[7000] grid min-h-dvh place-items-center overflow-y-auto px-3 py-6 sm:px-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        aria-label="Close login modal"
+        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={handleClose}
       />
 
-      {/* Modal */}
-      <div className="fixed inset-0 z-[4000] flex items-center justify-center p-4">
+      <div className="relative z-10 w-full max-w-sm">
         <div
-          className="relative w-full max-w-sm bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 shadow-2xl p-8 max-h-[90vh] overflow-y-auto"
+          className="relative w-full bg-white/10 backdrop-blur-2xl rounded-3xl border border-white/20 shadow-2xl p-5 sm:p-8 max-h-[calc(100dvh-3rem)] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
           style={{ animation: "fadeInScale 0.25s ease-out" }}
         >
@@ -409,6 +414,7 @@ export default function LoginModal({ isOpen, onClose }) {
           <div className="absolute bottom-0 left-0 w-40 h-40 bg-[#C5A059]/20 rounded-full blur-3xl -z-10" />
         </div>
       </div>
-    </>
+    </div>,
+    document.body
   );
 }

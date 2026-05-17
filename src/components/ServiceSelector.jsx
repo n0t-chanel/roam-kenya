@@ -54,32 +54,32 @@ const SERVICES = [
 
 export default function ServiceSelector({ onSelectService }) {
   return (
-    <div className="min-h-screen bg-white pt-32 pb-20">
-      <div className="max-w-[1440px] mx-auto px-6 md:px-12">
+    <div className="min-h-screen bg-white pt-24 sm:pt-28 md:pt-32 pb-14 sm:pb-20">
+      <div className="max-w-[1440px] mx-auto px-4 sm:px-6 md:px-12">
         {/* Header */}
-        <div className="text-center mb-16">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-4">
+        <div className="booking-portal-enter text-center mb-10 sm:mb-16">
+          <h1 className="text-3xl sm:text-5xl md:text-6xl font-bold text-gray-900 mb-4 leading-tight">
             Choose Your <span className="text-[#B35A38]">Service</span>
           </h1>
-          <p className="text-gray-600 text-lg max-w-2xl mx-auto">
+          <p className="text-gray-600 text-base sm:text-lg max-w-2xl mx-auto">
             Select a service to get started with your booking today
           </p>
         </div>
 
         {/* Service Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           {SERVICES.map((service) => {
             const IconComponent = service.icon;
             return (
               <button
                 key={service.id}
                 onClick={() => onSelectService(service.id)}
-                className="group relative p-8 bg-white border border-gray-300 hover:border-[#B35A38] transition-all duration-300 hover:shadow-lg text-left cursor-pointer"
+                className="booking-portal-enter group relative rounded-xl p-5 sm:p-8 bg-white border border-gray-200 shadow-[0_10px_28px_rgba(15,23,42,0.04)] hover:border-[#B35A38]/60 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(179,90,56,0.10)] transition-all duration-300 ease-out text-left cursor-pointer"
               >
                 {/* Content */}
                 <div>
                   {/* Icon */}
-                  <div className="w-16 h-16 bg-[#B35A38] flex items-center justify-center mb-4 group-hover:shadow-md transition-all duration-300">
+                  <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-lg bg-[#B35A38] flex items-center justify-center mb-4 shadow-[0_8px_18px_rgba(179,90,56,0.16)] group-hover:shadow-[0_10px_22px_rgba(179,90,56,0.22)] transition-all duration-300">
                     <IconComponent
                       size={32}
                       className="text-white"
@@ -87,7 +87,7 @@ export default function ServiceSelector({ onSelectService }) {
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-xl font-bold text-gray-900 mb-2 group-hover:text-[#B35A38] transition-colors duration-300">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-2 group-hover:text-[#B35A38] transition-colors duration-300">
                     {service.name}
                   </h3>
 
@@ -97,7 +97,7 @@ export default function ServiceSelector({ onSelectService }) {
                   </p>
 
                   {/* Arrow indicator */}
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 border border-gray-300 group-hover:bg-[#B35A38] group-hover:border-[#B35A38] group-hover:text-white transition-all duration-300">
+                  <div className="inline-flex items-center gap-2 rounded-lg px-4 py-2 bg-gray-100 border border-gray-200 group-hover:bg-[#B35A38] group-hover:border-[#B35A38] group-hover:text-white transition-all duration-300">
                     <span className="text-xs font-semibold tracking-widest">
                       SELECT
                     </span>

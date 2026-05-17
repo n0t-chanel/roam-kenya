@@ -6,7 +6,7 @@ export default function Hero() {
   const navigate = useNavigate();
 
   return (
-    <section className="relative w-full h-screen bg-black overflow-hidden">
+    <section className="relative w-full min-h-screen bg-black overflow-hidden">
       
       {/* BACKGROUND */}
       <div className="absolute inset-0 z-0">
@@ -22,13 +22,13 @@ export default function Hero() {
 
       {/* MAIN CONTENT */}
       {/* ADDED: pt-32 and pb-56 on mobile to keep text out of the logo and bottom strip */}
-      <div className="relative z-20 max-w-[1440px] mx-auto h-full px-6 md:px-12 flex items-center pt-32 pb-56 md:pt-0 md:pb-0">
+      <div className="relative z-20 max-w-[1440px] mx-auto min-h-[620px] sm:min-h-[640px] md:min-h-screen px-4 sm:px-6 md:px-12 flex items-center pt-28 pb-12 md:pt-0 md:pb-0">
         
         {/* ADDED: Adjusted margins to center better on mobile */}
         <div className="max-w-4xl mb-0 md:mb-24 mt-8 md:mt-0">
           
           {/* DYNAMIC TYPING TITLE */}
-          <h1 className="text-white font-serif text-5xl md:text-[75px] leading-[1.1] mb-6 min-h-[120px] md:min-h-[180px]">
+          <h1 className="text-white font-serif text-4xl sm:text-5xl md:text-[75px] leading-[1.1] mb-6 min-h-[104px] sm:min-h-[120px] md:min-h-[180px]">
             Premium Journeys. <br />
             <span className="italic font-light text-[#C5A059]">
               <Typewriter
@@ -51,8 +51,8 @@ export default function Hero() {
             </span>
           </h1>
 
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-10 h-[1px] bg-[#C5A059]" />
+          <div className="flex items-center gap-3 sm:gap-4 mb-6">
+            <div className="w-8 sm:w-10 h-[1px] bg-[#C5A059] shrink-0" />
             <span className="text-[#C5A059] tracking-[0.3em] uppercase text-[10px] md:text-[12px] font-bold">
               Luxury Transit Solutions Kenya
             </span>
@@ -63,16 +63,16 @@ export default function Hero() {
             From Nairobi to the Mara, we move you with class.
           </p>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <button 
               onClick={() => navigate("/booking")} 
-              className="bg-[#C5A059] text-black px-10 py-4 text-[11px] font-bold uppercase tracking-widest hover:bg-white transition-all shadow-2xl"
+              className="w-full sm:w-auto bg-[#C5A059] text-black px-7 sm:px-10 py-4 text-[11px] font-bold uppercase tracking-widest hover:bg-white transition-all shadow-2xl"
             >
               Book a Ride
             </button>
             <button 
               onClick={() => navigate("/services")} 
-              className="border border-white/40 text-white px-10 py-4 text-[11px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
+              className="w-full sm:w-auto border border-white/40 text-white px-7 sm:px-10 py-4 text-[11px] font-bold uppercase tracking-widest hover:bg-white/10 transition-all"
             >
               Explore Services
             </button>
@@ -81,9 +81,9 @@ export default function Hero() {
       </div>
 
       {/* COMPACT SERVICE STRIP */}
-      <div className="absolute bottom-0 left-0 w-full z-30 grid grid-cols-1 md:grid-cols-3 border-t border-white/10 bg-black/60 backdrop-blur-md">
+      <div className="relative md:absolute md:bottom-0 md:left-0 w-full z-30 grid grid-cols-1 md:grid-cols-3 border-t border-white/10 bg-black/70 md:bg-black/60 backdrop-blur-md">
         
-        <div className="p-6 md:p-8 border-r border-white/10 flex flex-col gap-3 group hover:bg-white/5 transition-all">
+        <div className="p-4 sm:p-6 md:p-8 border-b md:border-b-0 md:border-r border-white/10 flex flex-row md:flex-col items-start gap-3 group hover:bg-white/5 transition-all">
           <Plane className="text-[#C5A059] w-6 h-6 md:w-8 md:h-8 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
           <div>
             <h3 className="text-[#C5A059] uppercase tracking-widest text-[11px] font-bold mb-1">Airport Transfers</h3>
@@ -91,7 +91,7 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className="p-6 md:p-8 border-r border-white/10 flex flex-col gap-3 group hover:bg-white/5 transition-all">
+        <div className="p-4 sm:p-6 md:p-8 border-b md:border-b-0 md:border-r border-white/10 flex flex-row md:flex-col items-start gap-3 group hover:bg-white/5 transition-all">
           <Building2 className="text-[#C5A059] w-6 h-6 md:w-8 md:h-8 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
           <div>
             <h3 className="text-[#C5A059] uppercase tracking-widest text-[11px] font-bold mb-1">Corporate Travel</h3>
@@ -99,7 +99,7 @@ export default function Hero() {
           </div>
         </div>
 
-        <div className="p-6 md:p-8 flex flex-col gap-3 group hover:bg-white/5 transition-all">
+        <div className="p-4 sm:p-6 md:p-8 flex flex-row md:flex-col items-start gap-3 group hover:bg-white/5 transition-all">
           <Palmtree className="text-[#C5A059] w-6 h-6 md:w-8 md:h-8 group-hover:scale-110 transition-transform" strokeWidth={1.5} />
           <div>
             <h3 className="text-[#C5A059] uppercase tracking-widest text-[11px] font-bold mb-1">Safari Tours</h3>
