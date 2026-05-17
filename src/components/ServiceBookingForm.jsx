@@ -178,6 +178,9 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
   };
 
   const handleLocationSelect = (fieldName, suggestion) => {
+    if (fieldName === resolvedLocationFields.pickupField) {
+      setPickupGps(null);
+    }
     setFormData((prev) => ({ ...prev, [fieldName]: suggestion.shortLabel || suggestion.label }));
     setLocationCoords((prev) => ({
       ...prev,
@@ -190,6 +193,44 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
     setActiveLocationField(null);
     if (formErrors[fieldName]) {
       setFormErrors((prev) => ({ ...prev, [fieldName]: null }));
+    }
+  };
+
+  const handleMapLocationPick = async (fieldName, coordinates) => {
+    if (!fieldName || !coordinates) return;
+
+    const fallbackLabel = `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`;
+
+    if (fieldName === resolvedLocationFields.pickupField) {
+      setPickupGps(null);
+    }
+
+    setLocationLoadingField(fieldName);
+    setLocationCoords((prev) => ({
+      ...prev,
+      [fieldName]: coordinates
+    }));
+    setLocationSuggestions((prev) => ({ ...prev, [fieldName]: [] }));
+    setActiveLocationField(fieldName);
+
+    if (formErrors[fieldName]) {
+      setFormErrors((prev) => ({ ...prev, [fieldName]: null }));
+    }
+
+    try {
+      const place = await reverseGeocodeLocation(coordinates);
+      setFormData((prev) => ({
+        ...prev,
+        [fieldName]: place.shortLabel || place.label || fallbackLabel
+      }));
+    } catch (error) {
+      console.error("Mapbox reverse geocoding error:", error);
+      setFormData((prev) => ({
+        ...prev,
+        [fieldName]: fallbackLabel
+      }));
+    } finally {
+      setLocationLoadingField((current) => (current === fieldName ? null : current));
     }
   };
 
@@ -326,6 +367,9 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
     }
 
     if (isLocationField(name)) {
+      if (name === resolvedLocationFields.pickupField) {
+        setPickupGps(null);
+      }
       setLocationCoords((prev) => ({ ...prev, [name]: null }));
       setActiveLocationField(name);
       queueLocationSearch(name, value);
@@ -552,6 +596,10 @@ Thank you for booking with us!
             }));
           } catch (reverseError) {
             console.error("Reverse geocoding error:", reverseError);
+            setFormData((prev) => ({
+              ...prev,
+              [resolvedLocationFields.pickupField]: `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`
+            }));
           }
         }
       },
@@ -706,7 +754,10 @@ Thank you for booking with us!
   };
 
   const mapPickupCoords = pickupGps || locationCoords[resolvedLocationFields.pickupField] || null;
-  const mapDestCoords = locationCoords[resolvedLocationFields.dropoffField] || null;
+  const mapDestCoords =
+    resolvedLocationFields.dropoffField && resolvedLocationFields.dropoffField !== resolvedLocationFields.pickupField
+      ? locationCoords[resolvedLocationFields.dropoffField]
+      : null;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pt-28 pb-20">
@@ -853,8 +904,8 @@ Thank you for booking with us!
                           onChange={handleChange}
                           onFocus={() => setActiveLocationField(field.name)}
                           onBlur={() => setTimeout(() => setActiveLocationField(null), 300)}
-                          placeholder={field.placeholder || "Search a location in Kenya..."}
-                          className={`w-full pl-10 pr-10 py-3 border rounded-xl transition-all duration-300 ${
+                          placeholder={field.placeholder || "Search an address or place in Kenya..."}
+                          className={`w-full pl-10 ${field.name === resolvedLocationFields.pickupField ? "pr-20" : "pr-10"} py-3 border rounded-xl transition-all duration-300 ${
                             formErrors[field.name]
                               ? "border-red-500 bg-red-50"
                               : locationCoords[field.name]
@@ -862,23 +913,23 @@ Thank you for booking with us!
                                 : "border-gray-200 bg-gray-50 hover:border-gray-300"
                           } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-2 focus:ring-[#B35A38]/10 focus:bg-white`}
                         />
-                        {/* GPS button on pickup field */}
-                        {field.name === resolvedLocationFields.pickupField && (
-                          <button
-                            type="button"
-                            onClick={enableGpsPickup}
-                            title="Use my current location"
-                            className="absolute right-2 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <Crosshair size={18} />
-                          </button>
-                        )}
-                        {/* Checkmark when location is set */}
-                        {locationCoords[field.name] && (
-                          <div className="absolute right-2 text-green-500">
-                            <CheckCircle size={16} />
-                          </div>
-                        )}
+                        <div className="absolute right-2 flex items-center gap-1">
+                          {field.name === resolvedLocationFields.pickupField && (
+                            <button
+                              type="button"
+                              onClick={enableGpsPickup}
+                              title="Use my current location"
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Crosshair size={18} />
+                            </button>
+                          )}
+                          {locationCoords[field.name] && (
+                            <span className="text-green-500">
+                              <CheckCircle size={16} />
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {locationLoadingField === field.name && (
                         <div className="flex items-center gap-1.5 mt-1.5">
@@ -1264,6 +1315,11 @@ Thank you for booking with us!
               pickupCoords={mapPickupCoords}
               destinationCoords={mapDestCoords}
               gpsCoords={pickupGps}
+              pickupField={resolvedLocationFields.pickupField}
+              destinationField={resolvedLocationFields.dropoffField}
+              activeField={activeLocationField}
+              onActiveFieldChange={setActiveLocationField}
+              onLocationPick={handleMapLocationPick}
             />
           </div>
         </div>
