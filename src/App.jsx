@@ -54,7 +54,6 @@ function App() {
                   <AboutTeaser />
                   <Packages />
                   <Features /> 
-                  <Deals />
                   <CTA />
                 </>
               } />
