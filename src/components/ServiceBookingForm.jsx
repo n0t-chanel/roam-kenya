@@ -1143,24 +1143,6 @@ Thank you for booking with us!
                   </>
                 )}
               </button>
-
-              {/* Booking Action Buttons */}
-              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:gap-3 pt-4 border-t border-gray-200">
-                <a
-                  href="/bookings"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(179,90,56,0.10)] text-sm"
-                >
-                  <CheckCircle size={16} />
-                  View My Bookings
-                </a>
-                <a
-                  href="/profile"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#B35A38] hover:bg-[#B35A38]/5 text-[#B35A38] font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 text-sm"
-                >
-                  <CreditCard size={16} />
-                  Complete Payment
-                </a>
-              </div>
           </form>
         ) : (
           <div className="space-y-6">
@@ -1331,7 +1313,29 @@ Thank you for booking with us!
               </button>
             </section>
 
-            <div className="flex flex-col md:flex-row gap-3">
+            {/* Booking Action Buttons - Show after reservation */}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:gap-3">
+              <a
+                href="/bookings"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(179,90,56,0.10)] text-sm"
+              >
+                <CheckCircle size={16} />
+                View My Bookings
+              </a>
+              <button
+                type="button"
+                disabled={isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
+                onClick={handleReserveBookingPayment}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#B35A38] hover:bg-[#B35A38]/5 text-[#B35A38] font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {isPaying ? <Loader size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
+                  ? "Payment Complete"
+                  : "Complete Payment"}
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-3 mt-4">
               <button
                 type="button"
                 onClick={handleBookAnother}
