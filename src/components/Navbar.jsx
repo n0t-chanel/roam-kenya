@@ -26,15 +26,12 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-    };
-  }, [isOpen]);
+  const timer = setTimeout(() => {
+    setIsOpen(false);
+  }, 0);
+  
+  return () => clearTimeout(timer);
+}, [location.pathname, location.hash]);
 
   const serviceItems = [
     { name: "Airport Transfers", hash: "/services#transfers" },

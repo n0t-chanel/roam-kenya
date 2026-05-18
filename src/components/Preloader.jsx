@@ -4,7 +4,7 @@ import { CarFront } from "lucide-react";
 export default function Preloader({ isLoading }) {
   return (
     <div 
-      className={`fixed inset-0 z-[9999] bg-[#1A1A1A] flex flex-col items-center justify-center transition-opacity duration-500 ${
+      className={`fixed inset-0 z-[9999] bg-[#050505] flex flex-col items-center justify-center transition-opacity duration-500 ${
         isLoading ? "opacity-100" : "opacity-0 pointer-events-none"
       }`}
     >
