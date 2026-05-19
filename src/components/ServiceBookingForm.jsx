@@ -785,7 +785,7 @@ Thank you for booking with us!
         {/* Back Button */}
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-[#B35A38] hover:text-[#8B4225] transition-colors mb-6 font-semibold text-sm"
+          className="flex items-center gap-2 text-[#C5A059] hover:text-[#1A1A1A] transition-colors mb-6 font-semibold text-sm"
         >
           <ArrowLeft size={18} />
           Back to Services
@@ -794,7 +794,7 @@ Thank you for booking with us!
         {/* Header with Icon */}
         <div className="mb-6 sm:mb-8">
           <div className="booking-portal-enter flex items-start sm:items-center gap-3 sm:gap-4 mb-3">
-            <div className="w-11 h-11 sm:w-12 sm:h-12 shrink-0 bg-[#B35A38] rounded-lg flex items-center justify-center shadow-[0_8px_20px_rgba(179,90,56,0.16)]">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 shrink-0 bg-[#C5A059] rounded-lg flex items-center justify-center shadow-[0_8px_20px_rgba(197,160,89,0.18)]">
               {React.createElement(serviceIcons[serviceType] || Plane, { size: 24, color: "white" })}
             </div>
             <div className="min-w-0">
@@ -845,26 +845,26 @@ Thank you for booking with us!
                                   setFormErrors(prev => ({ ...prev, [field.name]: null }));
                                 }
                               }}
-                              className={`flex flex-col p-3 rounded-lg border transition-all duration-300 ease-out text-center hover:-translate-y-0.5 hover:shadow-[0_8px_16px_rgba(15,23,42,0.06)] ${
+                              className={`group flex flex-col p-3 rounded-lg border transition-all duration-300 ease-out text-center hover:-translate-y-0.5 hover:shadow-[0_8px_16px_rgba(15,23,42,0.12)] ${
                                 isSelected
-                                  ? "border-[#B35A38] bg-[#B35A38]/5 shadow-[0_6px_16px_rgba(179,90,56,0.08)]"
-                                  : "border-gray-200 bg-white hover:border-[#B35A38]/30"
+                                  ? "border-[#C5A059] bg-[#C5A059]/10 shadow-[0_6px_16px_rgba(197,160,89,0.10)] hover:border-[#1A1A1A] hover:bg-[#1A1A1A]"
+                                  : "border-gray-200 bg-white hover:border-[#1A1A1A] hover:bg-[#1A1A1A]"
                               }`}
                             >
                               <div className="flex items-center justify-center mb-2">
-                                <Car size={24} className={isSelected ? "text-[#B35A38]" : "text-gray-500"} />
+                                <Car size={24} className={`${isSelected ? "text-[#C5A059]" : "text-gray-500"} group-hover:text-white transition-colors`} />
                               </div>
-                              <h4 className="font-semibold text-gray-900 text-sm flex flex-wrap items-center justify-center gap-1.5">
+                              <h4 className="font-semibold text-gray-900 text-sm flex flex-wrap items-center justify-center gap-1.5 group-hover:text-white transition-colors">
                                 {option.split(' ').slice(0, 2).join(' ')}
                                 {(option.includes('Executive') || option.includes('Luxury') || option.includes('Limousine') || option.includes('Land Cruiser')) ? (
                                   <span className="bg-yellow-100 text-yellow-800 text-[8px] px-1.5 py-0.5 rounded-full font-bold">PREMIUM</span>
                                 ) : null}
                               </h4>
-                              <p className="text-[10px] text-gray-500 mt-1">
+                              <p className="text-[10px] text-gray-500 mt-1 group-hover:text-white/70 transition-colors">
                                 {option.includes('7-seater') ? '7 pax' : option.includes('10-seater') ? '10 pax' : option.includes('14-seater') || option.includes('15-seater') ? '15 pax' : option.includes('Van') ? 'Group' : '4 pax'}
                               </p>
                               {tripEstimate && (
-                                <div className={`font-bold text-sm mt-1.5 ${isSelected ? 'text-[#B35A38]' : 'text-gray-900'}`}>
+                                <div className={`font-bold text-sm mt-1.5 group-hover:text-white transition-colors ${isSelected ? 'text-[#C5A059]' : 'text-gray-900'}`}>
                                   {priceDisplay}
                                 </div>
                               )}
@@ -881,9 +881,9 @@ Thank you for booking with us!
                           formErrors[field.name]
                             ? "border-red-500 bg-red-50"
                             : "border-gray-300 bg-white hover:border-gray-400"
-                        } text-gray-900 focus:outline-none focus:border-[#B35A38] focus:ring-1 focus:ring-[#B35A38] appearance-none cursor-pointer`}
+                        } text-gray-900 focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] appearance-none cursor-pointer`}
                         style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23B35A38' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23C5A059' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
                           backgroundRepeat: 'no-repeat',
                           backgroundPosition: 'right 1rem center',
                           paddingRight: '2.5rem'
@@ -924,7 +924,7 @@ Thank you for booking with us!
                               : locationCoords[field.name]
                                 ? "border-green-400 bg-green-50/30"
                                 : "border-gray-200 bg-gray-50 hover:border-gray-300"
-                          } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-2 focus:ring-[#B35A38]/10 focus:bg-white`}
+                          } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#C5A059] focus:ring-2 focus:ring-[#C5A059]/10 focus:bg-white`}
                         />
                         <div className="absolute right-2 flex items-center gap-1">
                           {field.name === resolvedLocationFields.pickupField && (
@@ -946,7 +946,7 @@ Thank you for booking with us!
                       </div>
                       {locationLoadingField === field.name && (
                         <div className="flex items-center gap-1.5 mt-1.5">
-                          <Loader size={12} className="animate-spin text-[#B35A38]" />
+                          <Loader size={12} className="animate-spin text-[#C5A059]" />
                           <p className="text-xs text-gray-500">Searching locations...</p>
                         </div>
                       )}
@@ -971,14 +971,14 @@ Thank you for booking with us!
                                 key={`${field.name}-${suggestion.latitude}-${suggestion.longitude}-${suggestion.label}`}
                                 type="button"
                                 onMouseDown={(e) => { e.preventDefault(); handleLocationSelect(field.name, suggestion); }}
-                                className="w-full text-left px-4 py-3 hover:bg-[#B35A38]/5 border-b border-gray-50 last:border-b-0 flex items-start gap-3 transition-colors cursor-pointer"
+                                className="group w-full text-left px-4 py-3 hover:bg-[#1A1A1A] border-b border-gray-50 last:border-b-0 flex items-start gap-3 transition-colors cursor-pointer"
                               >
-                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 flex-shrink-0 mt-0.5">
-                                  <IconComponent size={16} className="text-[#B35A38]" />
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 group-hover:bg-white/10 flex-shrink-0 mt-0.5 transition-colors">
+                                  <IconComponent size={16} className="text-[#C5A059] group-hover:text-white transition-colors" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-gray-900">{suggestion.shortLabel || suggestion.label}</p>
-                                  <p className="text-xs text-gray-500 truncate">{suggestion.label}</p>
+                                  <p className="text-sm font-semibold text-gray-900 group-hover:text-white transition-colors">{suggestion.shortLabel || suggestion.label}</p>
+                                  <p className="text-xs text-gray-500 truncate group-hover:text-white/70 transition-colors">{suggestion.label}</p>
                                 </div>
                               </button>
                             );
@@ -1000,7 +1000,7 @@ Thank you for booking with us!
                         formErrors[field.name]
                           ? "border-red-500 bg-red-50"
                           : "border-gray-300 bg-white hover:border-gray-400"
-                      } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-1 focus:ring-[#B35A38]`}
+                      } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]`}
                     />
                   )}
                   
@@ -1017,7 +1017,7 @@ Thank you for booking with us!
               {/* === UBER-STYLE FARE ESTIMATION CARD === */}
               {(resolvedLocationFields.pickupField || resolvedLocationFields.dropoffField) && (
                 <div className={`rounded-xl border overflow-hidden transition-all duration-500 ${
-                  tripEstimate ? "border-[#B35A38]/30 bg-gradient-to-br from-white to-orange-50/50 shadow-[0_10px_28px_rgba(179,90,56,0.08)]" : "border-gray-200 bg-gray-50 shadow-[0_8px_22px_rgba(15,23,42,0.03)]"
+                  tripEstimate ? "border-[#C5A059]/30 bg-gradient-to-br from-white to-[#C5A059]/10 shadow-[0_10px_28px_rgba(197,160,89,0.10)]" : "border-gray-200 bg-gray-50 shadow-[0_8px_22px_rgba(15,23,42,0.03)]"
                 }`}>
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -1026,7 +1026,7 @@ Thank you for booking with us!
                         <p className="text-sm font-bold text-gray-900">Trip Estimate</p>
                       </div>
                       {tripEstimate && (
-                        <span className="text-[10px] font-bold text-[#B35A38] bg-[#B35A38]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Live</span>
+                        <span className="text-[10px] font-bold text-[#C5A059] bg-[#C5A059]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Live</span>
                       )}
                     </div>
                     <p className="text-xs text-gray-500">30% refundable reservation · Final payment after confirmation</p>
@@ -1042,9 +1042,9 @@ Thank you for booking with us!
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Fare</p>
                           <p className="text-lg font-black text-gray-900 mt-0.5">{formatKesFromCents(tripEstimate.totalPriceCents)}</p>
                         </div>
-                        <div className="bg-[#B35A38]/5 rounded-lg border border-[#B35A38]/20 p-3">
-                          <p className="text-[10px] text-[#B35A38] uppercase tracking-wider font-semibold">Reserve (30%)</p>
-                          <p className="text-lg font-black text-[#B35A38] mt-0.5">{formatKesFromCents(tripEstimate.reservationFeeCents)}</p>
+                        <div className="bg-[#C5A059]/10 rounded-lg border border-[#C5A059]/20 p-3">
+                          <p className="text-[10px] text-[#C5A059] uppercase tracking-wider font-semibold">Reserve (30%)</p>
+                          <p className="text-lg font-black text-[#C5A059] mt-0.5">{formatKesFromCents(tripEstimate.reservationFeeCents)}</p>
                         </div>
                       </div>
                       <div className="mt-3 flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
@@ -1081,7 +1081,7 @@ Thank you for booking with us!
                     formErrors.phone
                       ? "border-red-500 bg-red-50"
                       : "border-gray-300 bg-white hover:border-gray-400"
-                  } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-1 focus:ring-[#B35A38]`}
+                  } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059]`}
                 />
                 {formErrors.phone && (
                   <p className="text-red-600 text-xs mt-1.5 flex items-center gap-1">
@@ -1102,7 +1102,7 @@ Thank you for booking with us!
                     setFormData(prev => ({ ...prev, specialRequests: e.target.value }))
                   }
                   placeholder="Any special requirements or preferences..."
-                  className="w-full rounded-lg px-4 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-1 focus:ring-[#B35A38] transition-all duration-300 resize-none h-20 hover:border-gray-400"
+                  className="w-full rounded-lg px-4 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#C5A059] focus:ring-1 focus:ring-[#C5A059] transition-all duration-300 resize-none h-20 hover:border-gray-400"
                 />
               </div>
 
@@ -1130,7 +1130,7 @@ Thank you for booking with us!
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-6 bg-[#1A1A1A] hover:bg-[#B35A38] text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_10px_24px_rgba(15,23,42,0.12)] hover:shadow-[0_14px_30px_rgba(179,90,56,0.14)] text-base"
+                className="w-full mt-6 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_10px_24px_rgba(197,160,89,0.18)] hover:shadow-[0_14px_30px_rgba(15,23,42,0.18)] text-base"
               >
                 {isSubmitting ? (
                   <>
@@ -1169,63 +1169,63 @@ Thank you for booking with us!
               <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><CheckCircle size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><CheckCircle size={18} /></div>
                     <div>
                       <p className="text-gray-500">Booking ID</p>
                       <p className="font-semibold text-gray-900 break-all">{activeBooking?.id || bookingId}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><Truck size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><Truck size={18} /></div>
                     <div>
                       <p className="text-gray-500">Service</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.service}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><MapPin size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><MapPin size={18} /></div>
                     <div>
                       <p className="text-gray-500">Pickup</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.pickupLocation}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><MapPin size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><MapPin size={18} /></div>
                     <div>
                       <p className="text-gray-500">Destination</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.destinationLocation}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><Calendar size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><Calendar size={18} /></div>
                     <div>
                       <p className="text-gray-500">Date</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.date}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><Clock size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><Clock size={18} /></div>
                     <div>
                       <p className="text-gray-500">Time</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.time}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><Users size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><Users size={18} /></div>
                     <div>
                       <p className="text-gray-500">Passengers</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.passengers}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><Car size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><Car size={18} /></div>
                     <div>
                       <p className="text-gray-500">Vehicle</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.vehicleType}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 text-[#B35A38]"><Phone size={18} /></div>
+                    <div className="mt-0.5 text-[#C5A059]"><Phone size={18} /></div>
                     <div>
                       <p className="text-gray-500">Contact</p>
                       <p className="font-semibold text-gray-900">{activeBooking?.phoneNumber}</p>
@@ -1233,7 +1233,7 @@ Thank you for booking with us!
                   </div>
                   {activeBooking?.flightNumber && (
                     <div className="flex items-start gap-3">
-                      <div className="mt-0.5 text-[#B35A38]"><Plane size={18} /></div>
+                      <div className="mt-0.5 text-[#C5A059]"><Plane size={18} /></div>
                       <div>
                         <p className="text-gray-500">Flight Number</p>
                         <p className="font-semibold text-gray-900">{activeBooking.flightNumber}</p>
@@ -1304,7 +1304,7 @@ Thank you for booking with us!
                 type="button"
                 disabled={isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
                 onClick={handleReserveBookingPayment}
-                className="mt-5 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_10px_24px_rgba(179,90,56,0.12)]"
+                className="mt-5 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg px-6 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_10px_24px_rgba(197,160,89,0.18)]"
               >
                 {isPaying ? <Loader size={18} className="animate-spin" /> : <CreditCard size={18} />}
                 {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
@@ -1317,7 +1317,7 @@ Thank you for booking with us!
             <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:gap-3">
               <a
                 href="/bookings"
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(179,90,56,0.10)] text-sm"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(197,160,89,0.16)] text-sm"
               >
                 <CheckCircle size={16} />
                 View My Bookings
@@ -1326,7 +1326,7 @@ Thank you for booking with us!
                 type="button"
                 disabled={isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
                 onClick={handleReserveBookingPayment}
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#B35A38] hover:bg-[#B35A38]/5 text-[#B35A38] font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#C5A059] hover:border-[#1A1A1A] hover:bg-[#1A1A1A] text-[#C5A059] hover:text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
               >
                 {isPaying ? <Loader size={16} className="animate-spin" /> : <CreditCard size={16} />}
                 {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
@@ -1339,7 +1339,7 @@ Thank you for booking with us!
               <button
                 type="button"
                 onClick={handleBookAnother}
-                className="rounded-lg px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_20px_rgba(179,90,56,0.10)]"
+                className="rounded-lg px-6 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_20px_rgba(197,160,89,0.16)]"
               >
                 Book Another Ride
               </button>
