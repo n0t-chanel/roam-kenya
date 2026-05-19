@@ -36,15 +36,15 @@ export default function Footer() {
 
   return (
     <>
-      <footer className="bg-[#050505] text-white pt-24 pb-8 border-t border-white/10 relative overflow-hidden">
+      <footer className="bg-[#050505] text-white pt-16 sm:pt-24 pb-8 border-t border-white/10 relative overflow-hidden">
         
         {/* Subtle Background Glow */}
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#B35A38]/5 rounded-full blur-[150px] pointer-events-none translate-y-1/2 -translate-x-1/2" />
 
-        <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
           
           {/* TOP VIP NEWSLETTER SECTION */}
-          <div className="flex flex-col lg:flex-row justify-between items-center gap-10 pb-16 border-b border-white/10 mb-16">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-8 sm:gap-10 pb-12 sm:pb-16 border-b border-white/10 mb-12 sm:mb-16">
             <div className="max-w-xl text-center lg:text-left">
               <h3 className="text-2xl md:text-3xl font-bold font-serif mb-2 text-white">Join Our Private List</h3>
               <p className="text-gray-400 font-light text-sm">

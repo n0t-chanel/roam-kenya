@@ -103,11 +103,11 @@ export function useAuth() {
     }
   }
 
-  const signInWithApple = async () => {
+  const signInWithFacebook = async () => {
     try {
       setError(null)
       const { data, error } = await supabaseAuth.signInWithOAuth({
-        provider: 'apple',
+        provider: 'facebook',
         options: {
           redirectTo: `${window.location.origin}/`
         }
@@ -164,7 +164,7 @@ export function useAuth() {
     signOut,
     resetPassword,
     signInWithGoogle,
-    signInWithApple,
+    signInWithFacebook,
     signUpAnonymous
   }
 }

@@ -1,7 +1,8 @@
 import React from "react";
 import { useNavigate } from "react-router-dom"; 
 import { MapPin, Plane, TreePine, Building2, MessageCircle } from "lucide-react";
-import BackButton from "../components/BackButton"; // Highly recommended to import this here too!
+import Navbar from "../components/Navbar";
+import BackButton from "../components/BackButton";// Highly recommended to import this here too!
 
 const coverage = [
   {
@@ -32,6 +33,7 @@ export default function Destinations() {
 
   return (
     <div className="pt-32 pb-32 bg-[#050505] min-h-screen text-white relative overflow-hidden">
+      <Navbar />
       {/* Optional: Add back button if you imported it above */}
       {/* <BackButton /> */}
 

@@ -10,10 +10,14 @@ import {
   createPaymentReference,
   formatKesFromCents,
   reverseGeocodeLocation,
-  searchKenyaLocations,
   startPaystackCheckout,
   VEHICLE_MULTIPLIERS
 } from "../lib/paystack";
+import {
+  searchLocationAliases,
+  KENYA_AIRPORTS
+} from "../lib/kenyaLocations";
+import { searchLocationsUnified } from "../lib/locationSearch";
 import { verifyPaymentServerSide } from "../lib/paymentVerification";
 
 export default function ServiceBookingForm({ serviceType, onBack }) {
@@ -158,15 +162,24 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
       clearTimeout(searchDebounceRef.current[fieldName]);
     }
 
-    if (!query || query.length < 3) {
+    if (!query || query.length < 2) {
       setLocationSuggestions((prev) => ({ ...prev, [fieldName]: [] }));
       return;
     }
 
+    // Try local Kenya database first (instant, precise results)
+    const aliasResults = searchLocationAliases(query);
+    if (aliasResults.length > 0) {
+      setLocationSuggestions((prev) => ({ ...prev, [fieldName]: aliasResults }));
+      setLocationLoadingField(null);
+      return;
+    }
+
+    // Use unified search (Local → Nominatim → Mapbox) with debounce
     searchDebounceRef.current[fieldName] = setTimeout(async () => {
       setLocationLoadingField(fieldName);
       try {
-        const suggestions = await searchKenyaLocations(query);
+        const suggestions = await searchLocationsUnified(query);
         setLocationSuggestions((prev) => ({ ...prev, [fieldName]: suggestions }));
       } catch (error) {
         console.error("Location suggestion error:", error);
@@ -178,6 +191,16 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
   };
 
   const handleLocationSelect = (fieldName, suggestion) => {
+    // Validate suggestion has required coordinates
+    if (!suggestion || typeof suggestion.latitude !== 'number' || typeof suggestion.longitude !== 'number') {
+      console.error("Invalid suggestion object:", suggestion);
+      setEstimateError("Invalid location selected. Please try again.");
+      return;
+    }
+    
+    if (fieldName === resolvedLocationFields.pickupField) {
+      setPickupGps(null);
+    }
     setFormData((prev) => ({ ...prev, [fieldName]: suggestion.shortLabel || suggestion.label }));
     setLocationCoords((prev) => ({
       ...prev,
@@ -190,6 +213,44 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
     setActiveLocationField(null);
     if (formErrors[fieldName]) {
       setFormErrors((prev) => ({ ...prev, [fieldName]: null }));
+    }
+  };
+
+  const handleMapLocationPick = async (fieldName, coordinates) => {
+    if (!fieldName || !coordinates) return;
+
+    const fallbackLabel = `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`;
+
+    if (fieldName === resolvedLocationFields.pickupField) {
+      setPickupGps(null);
+    }
+
+    setLocationLoadingField(fieldName);
+    setLocationCoords((prev) => ({
+      ...prev,
+      [fieldName]: coordinates
+    }));
+    setLocationSuggestions((prev) => ({ ...prev, [fieldName]: [] }));
+    setActiveLocationField(fieldName);
+
+    if (formErrors[fieldName]) {
+      setFormErrors((prev) => ({ ...prev, [fieldName]: null }));
+    }
+
+    try {
+      const place = await reverseGeocodeLocation(coordinates);
+      setFormData((prev) => ({
+        ...prev,
+        [fieldName]: place.shortLabel || place.label || fallbackLabel
+      }));
+    } catch (error) {
+      console.error("Mapbox reverse geocoding error:", error);
+      setFormData((prev) => ({
+        ...prev,
+        [fieldName]: fallbackLabel
+      }));
+    } finally {
+      setLocationLoadingField((current) => (current === fieldName ? null : current));
     }
   };
 
@@ -326,6 +387,9 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
     }
 
     if (isLocationField(name)) {
+      if (name === resolvedLocationFields.pickupField) {
+        setPickupGps(null);
+      }
       setLocationCoords((prev) => ({ ...prev, [name]: null }));
       setActiveLocationField(name);
       queueLocationSearch(name, value);
@@ -552,6 +616,10 @@ Thank you for booking with us!
             }));
           } catch (reverseError) {
             console.error("Reverse geocoding error:", reverseError);
+            setFormData((prev) => ({
+              ...prev,
+              [resolvedLocationFields.pickupField]: `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`
+            }));
           }
         }
       },
@@ -706,11 +774,14 @@ Thank you for booking with us!
   };
 
   const mapPickupCoords = pickupGps || locationCoords[resolvedLocationFields.pickupField] || null;
-  const mapDestCoords = locationCoords[resolvedLocationFields.dropoffField] || null;
+  const mapDestCoords =
+    resolvedLocationFields.dropoffField && resolvedLocationFields.dropoffField !== resolvedLocationFields.pickupField
+      ? locationCoords[resolvedLocationFields.dropoffField]
+      : null;
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] pt-28 pb-20">
-      <div className="max-w-7xl mx-auto px-4 md:px-8">
+    <div className="min-h-screen bg-[#FAFAFA] pt-24 sm:pt-28 pb-14 sm:pb-20">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8">
         {/* Back Button */}
         <button
           onClick={onBack}
@@ -721,25 +792,25 @@ Thank you for booking with us!
         </button>
 
         {/* Header with Icon */}
-        <div className="mb-8">
-          <div className="flex items-center gap-4 mb-3">
-            <div className="w-12 h-12 bg-[#B35A38] rounded-xl flex items-center justify-center shadow-lg shadow-[#B35A38]/20">
-              {React.createElement(serviceIcons[serviceType] || Plane, { size: 26, color: "white" })}
+        <div className="mb-6 sm:mb-8">
+          <div className="booking-portal-enter flex items-start sm:items-center gap-3 sm:gap-4 mb-3">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 shrink-0 bg-[#B35A38] rounded-lg flex items-center justify-center shadow-[0_8px_20px_rgba(179,90,56,0.16)]">
+              {React.createElement(serviceIcons[serviceType] || Plane, { size: 24, color: "white" })}
             </div>
-            <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900">{config.label}</h1>
+            <div className="min-w-0">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 leading-tight">{config.label}</h1>
               <p className="text-gray-500 text-sm">Complete your booking details below</p>
             </div>
           </div>
         </div>
 
-        {/* === SPLIT LAYOUT: Form Left + Map Right === */}
-        <div className="flex flex-col lg:flex-row gap-6">
+        {/* === SPLIT LAYOUT: Form Left (Narrower) + Map Right (Larger) === */}
+        <div className="flex flex-col lg:flex-row gap-4 lg:gap-5">
 
-        {/* LEFT PANEL — Form */}
-        <div className="flex-1 min-w-0">
+        {/* LEFT PANEL — Form (Narrower on desktop) */}
+        <div className="w-full lg:w-[520px] lg:flex-shrink-0 min-w-0">
         {submitStatus?.type !== "success" ? (
-          <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 md:p-8 space-y-5">
+          <form onSubmit={handleSubmit} className="booking-portal-enter bg-white rounded-xl border border-gray-200 shadow-[0_12px_34px_rgba(15,23,42,0.06)] p-4 sm:p-6 md:p-8 space-y-5">
             {/* Dynamic Service Fields */}
             <div className="space-y-5">
               {config.fields.map((field) => (
@@ -752,7 +823,7 @@ Thank you for booking with us!
                   {/* Select field for vehicle type */}
                   {field.type === "select" ? (
                     field.name === "vehicleType" ? (
-                      <div className="space-y-3 mt-4">
+                      <div className="grid grid-cols-2 gap-2 mt-4">
                         {field.options?.map((option) => {
                           const multiplier = VEHICLE_MULTIPLIERS?.[option] || 1.0;
                           let priceDisplay = "Select locations for price";
@@ -774,36 +845,29 @@ Thank you for booking with us!
                                   setFormErrors(prev => ({ ...prev, [field.name]: null }));
                                 }
                               }}
-                              className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-300 text-left ${
+                              className={`flex flex-col p-3 rounded-lg border transition-all duration-300 ease-out text-center hover:-translate-y-0.5 hover:shadow-[0_8px_16px_rgba(15,23,42,0.06)] ${
                                 isSelected
-                                  ? "border-[#B35A38] bg-[#B35A38]/5"
+                                  ? "border-[#B35A38] bg-[#B35A38]/5 shadow-[0_6px_16px_rgba(179,90,56,0.08)]"
                                   : "border-gray-200 bg-white hover:border-[#B35A38]/30"
                               }`}
                             >
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-8 flex items-center justify-center">
-                                  <Car size={28} className={isSelected ? "text-[#B35A38]" : "text-gray-500"} />
-                                </div>
-                                <div>
-                                  <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                                    {option}
-                                    {(option.includes('Executive') || option.includes('Luxury') || option.includes('Limousine') || option.includes('Land Cruiser')) ? (
-                                      <span className="bg-yellow-100 text-yellow-800 text-[10px] px-2 py-0.5 rounded-full font-bold">PREMIUM</span>
-                                    ) : null}
-                                  </h4>
-                                  <p className="text-xs text-gray-500">
-                                    {option.includes('7-seater') ? 'Up to 7 passengers' : option.includes('10-seater') ? 'Up to 10 passengers' : option.includes('14-seater') || option.includes('15-seater') ? 'Up to 15 passengers' : option.includes('Van') ? 'Group travel' : 'Up to 4 passengers'}
-                                  </p>
-                                </div>
+                              <div className="flex items-center justify-center mb-2">
+                                <Car size={24} className={isSelected ? "text-[#B35A38]" : "text-gray-500"} />
                               </div>
-                              <div className="text-right">
-                                <div className="font-bold text-gray-900">{priceDisplay}</div>
-                                {tripEstimate && (
-                                  <div className={`text-[10px] font-semibold uppercase tracking-wider ${isSelected ? 'text-green-600' : 'text-transparent'}`}>
-                                    Selected
-                                  </div>
-                                )}
-                              </div>
+                              <h4 className="font-semibold text-gray-900 text-sm flex flex-wrap items-center justify-center gap-1.5">
+                                {option.split(' ').slice(0, 2).join(' ')}
+                                {(option.includes('Executive') || option.includes('Luxury') || option.includes('Limousine') || option.includes('Land Cruiser')) ? (
+                                  <span className="bg-yellow-100 text-yellow-800 text-[8px] px-1.5 py-0.5 rounded-full font-bold">PREMIUM</span>
+                                ) : null}
+                              </h4>
+                              <p className="text-[10px] text-gray-500 mt-1">
+                                {option.includes('7-seater') ? '7 pax' : option.includes('10-seater') ? '10 pax' : option.includes('14-seater') || option.includes('15-seater') ? '15 pax' : option.includes('Van') ? 'Group' : '4 pax'}
+                              </p>
+                              {tripEstimate && (
+                                <div className={`font-bold text-sm mt-1.5 ${isSelected ? 'text-[#B35A38]' : 'text-gray-900'}`}>
+                                  {priceDisplay}
+                                </div>
+                              )}
                             </button>
                           );
                         })}
@@ -813,7 +877,7 @@ Thank you for booking with us!
                         name={field.name}
                         value={formData[field.name] || ""}
                         onChange={handleChange}
-                        className={`w-full px-4 py-3 border transition-all duration-300 ${
+                        className={`w-full rounded-lg px-4 py-3 border transition-all duration-300 ${
                           formErrors[field.name]
                             ? "border-red-500 bg-red-50"
                             : "border-gray-300 bg-white hover:border-gray-400"
@@ -853,8 +917,8 @@ Thank you for booking with us!
                           onChange={handleChange}
                           onFocus={() => setActiveLocationField(field.name)}
                           onBlur={() => setTimeout(() => setActiveLocationField(null), 300)}
-                          placeholder={field.placeholder || "Search a location in Kenya..."}
-                          className={`w-full pl-10 pr-10 py-3 border rounded-xl transition-all duration-300 ${
+                          placeholder={field.placeholder || "Search an address or place in Kenya..."}
+                          className={`w-full pl-10 ${field.name === resolvedLocationFields.pickupField ? "pr-20" : "pr-10"} py-3 border rounded-lg transition-all duration-300 ${
                             formErrors[field.name]
                               ? "border-red-500 bg-red-50"
                               : locationCoords[field.name]
@@ -862,23 +926,23 @@ Thank you for booking with us!
                                 : "border-gray-200 bg-gray-50 hover:border-gray-300"
                           } text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-2 focus:ring-[#B35A38]/10 focus:bg-white`}
                         />
-                        {/* GPS button on pickup field */}
-                        {field.name === resolvedLocationFields.pickupField && (
-                          <button
-                            type="button"
-                            onClick={enableGpsPickup}
-                            title="Use my current location"
-                            className="absolute right-2 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <Crosshair size={18} />
-                          </button>
-                        )}
-                        {/* Checkmark when location is set */}
-                        {locationCoords[field.name] && (
-                          <div className="absolute right-2 text-green-500">
-                            <CheckCircle size={16} />
-                          </div>
-                        )}
+                        <div className="absolute right-2 flex items-center gap-1">
+                          {field.name === resolvedLocationFields.pickupField && (
+                            <button
+                              type="button"
+                              onClick={enableGpsPickup}
+                              title="Use my current location"
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            >
+                              <Crosshair size={18} />
+                            </button>
+                          )}
+                          {locationCoords[field.name] && (
+                            <span className="text-green-500">
+                              <CheckCircle size={16} />
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {locationLoadingField === field.name && (
                         <div className="flex items-center gap-1.5 mt-1.5">
@@ -892,21 +956,33 @@ Thank you for booking with us!
                         </p>
                       )}
                       {activeLocationField === field.name && (locationSuggestions[field.name] || []).length > 0 && (
-                        <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-gray-200 shadow-xl max-h-56 overflow-y-auto">
-                          {(locationSuggestions[field.name] || []).map((suggestion) => (
-                            <button
-                              key={`${field.name}-${suggestion.latitude}-${suggestion.longitude}-${suggestion.label}`}
-                              type="button"
-                              onMouseDown={(e) => { e.preventDefault(); handleLocationSelect(field.name, suggestion); }}
-                              className="w-full text-left px-4 py-2.5 hover:bg-[#B35A38]/5 border-b border-gray-50 last:border-b-0 flex items-start gap-3 transition-colors cursor-pointer"
-                            >
-                              <MapPin size={14} className="text-[#B35A38] mt-0.5 flex-shrink-0" />
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900">{suggestion.shortLabel || suggestion.label}</p>
-                                <p className="text-xs text-gray-400 truncate">{suggestion.label}</p>
-                              </div>
-                            </button>
-                          ))}
+                        <div className="absolute z-20 mt-1 w-full bg-white rounded-lg border border-gray-200 shadow-[0_16px_34px_rgba(15,23,42,0.10)] max-h-56 overflow-y-auto">
+                          {(locationSuggestions[field.name] || []).map((suggestion) => {
+                            // Determine icon based on location type
+                            let IconComponent = MapPin;
+                            if (suggestion.type === "airport") {
+                              IconComponent = Plane;
+                            } else if (suggestion.type === "landmark") {
+                              IconComponent = MapPin;
+                            }
+                            
+                            return (
+                              <button
+                                key={`${field.name}-${suggestion.latitude}-${suggestion.longitude}-${suggestion.label}`}
+                                type="button"
+                                onMouseDown={(e) => { e.preventDefault(); handleLocationSelect(field.name, suggestion); }}
+                                className="w-full text-left px-4 py-3 hover:bg-[#B35A38]/5 border-b border-gray-50 last:border-b-0 flex items-start gap-3 transition-colors cursor-pointer"
+                              >
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 flex-shrink-0 mt-0.5">
+                                  <IconComponent size={16} className="text-[#B35A38]" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold text-gray-900">{suggestion.shortLabel || suggestion.label}</p>
+                                  <p className="text-xs text-gray-500 truncate">{suggestion.label}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -920,7 +996,7 @@ Thank you for booking with us!
                       placeholder={field.placeholder}
                       min={field.min}
                       max={field.max}
-                      className={`w-full px-4 py-3 border transition-all duration-300 ${
+                      className={`w-full rounded-lg px-4 py-3 border transition-all duration-300 ${
                         formErrors[field.name]
                           ? "border-red-500 bg-red-50"
                           : "border-gray-300 bg-white hover:border-gray-400"
@@ -941,7 +1017,7 @@ Thank you for booking with us!
               {/* === UBER-STYLE FARE ESTIMATION CARD === */}
               {(resolvedLocationFields.pickupField || resolvedLocationFields.dropoffField) && (
                 <div className={`rounded-xl border overflow-hidden transition-all duration-500 ${
-                  tripEstimate ? "border-[#B35A38]/30 bg-gradient-to-br from-white to-orange-50/50 shadow-md" : "border-gray-200 bg-gray-50"
+                  tripEstimate ? "border-[#B35A38]/30 bg-gradient-to-br from-white to-orange-50/50 shadow-[0_10px_28px_rgba(179,90,56,0.08)]" : "border-gray-200 bg-gray-50 shadow-[0_8px_22px_rgba(15,23,42,0.03)]"
                 }`}>
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -953,16 +1029,16 @@ Thank you for booking with us!
                         <span className="text-[10px] font-bold text-[#B35A38] bg-[#B35A38]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Live</span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500">Distance-based at KES 100/km · 30% refundable reservation</p>
+                    <p className="text-xs text-gray-500">30% refundable reservation · Final payment after confirmation</p>
                   </div>
                   {tripEstimate ? (
                     <div className="px-4 pb-4">
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+                        <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Distance</p>
                           <p className="text-lg font-black text-gray-900 mt-0.5">{tripEstimate.distanceKm}<span className="text-xs font-medium text-gray-400 ml-0.5">km</span></p>
                         </div>
-                        <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-sm">
+                        <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Fare</p>
                           <p className="text-lg font-black text-gray-900 mt-0.5">{formatKesFromCents(tripEstimate.totalPriceCents)}</p>
                         </div>
@@ -984,7 +1060,7 @@ Thank you for booking with us!
                     </div>
                   ) : (
                     <div className="px-4 pb-4">
-                      <p className="text-xs text-gray-500">Select both pickup & destination from suggestions to see fare</p>
+                      <p className="text-xs text-gray-500">Select both pickup & destination from suggestions to see fare estimate</p>
                     </div>
                   )}
                   {estimateError && <p className="text-xs text-red-600 px-4 pb-3">{estimateError}</p>}
@@ -1001,7 +1077,7 @@ Thank you for booking with us!
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="Your contact number"
-                  className={`w-full px-4 py-3 border transition-all duration-300 ${
+                  className={`w-full rounded-lg px-4 py-3 border transition-all duration-300 ${
                     formErrors.phone
                       ? "border-red-500 bg-red-50"
                       : "border-gray-300 bg-white hover:border-gray-400"
@@ -1026,14 +1102,14 @@ Thank you for booking with us!
                     setFormData(prev => ({ ...prev, specialRequests: e.target.value }))
                   }
                   placeholder="Any special requirements or preferences..."
-                  className="w-full px-4 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-1 focus:ring-[#B35A38] transition-all duration-300 resize-none h-20 hover:border-gray-400"
+                  className="w-full rounded-lg px-4 py-3 border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:outline-none focus:border-[#B35A38] focus:ring-1 focus:ring-[#B35A38] transition-all duration-300 resize-none h-20 hover:border-gray-400"
                 />
               </div>
 
               {/* Status Messages */}
               {submitStatus && (
                 <div
-                  className={`p-4 flex items-start gap-3 ${
+                  className={`rounded-lg p-4 flex items-start gap-3 shadow-[0_8px_20px_rgba(15,23,42,0.04)] ${
                     submitStatus.type === "error"
                       ? "bg-red-100 border border-red-400 text-red-700"
                       : "bg-green-100 border border-green-400 text-green-700"
@@ -1054,7 +1130,7 @@ Thank you for booking with us!
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-6 bg-[#1A1A1A] hover:bg-[#B35A38] text-white font-bold py-4 px-6 rounded-xl transition-all duration-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-xl text-base"
+                className="w-full mt-6 bg-[#1A1A1A] hover:bg-[#B35A38] text-white font-bold py-4 px-6 rounded-lg transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-[0_10px_24px_rgba(15,23,42,0.12)] hover:shadow-[0_14px_30px_rgba(179,90,56,0.14)] text-base"
               >
                 {isSubmitting ? (
                   <>
@@ -1070,33 +1146,33 @@ Thank you for booking with us!
           </form>
         ) : (
           <div className="space-y-6">
-            <div className="bg-white border border-green-400 p-8">
-              <div className="flex items-start gap-4">
-                <div className="p-3 bg-green-100 border border-green-400">
+            <div className="booking-portal-enter bg-white rounded-xl border border-green-300 p-5 sm:p-8 shadow-[0_12px_34px_rgba(22,163,74,0.08)]">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="p-2 sm:p-3 bg-green-100 border border-green-300 rounded-lg">
                   <CheckCircle size={32} className="text-green-600" />
                 </div>
-                <div>
-                  <p className="text-2xl font-bold text-gray-900 mb-1">Booking Confirmed</p>
+                <div className="min-w-0">
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">Booking Confirmed</p>
                   <p className="text-green-700">{submitStatus?.message || "Your booking has been confirmed."}</p>
                 </div>
               </div>
             </div>
 
-            <section className="bg-white border border-gray-300 p-8">
-              <div className="flex items-center justify-between mb-6">
+            <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-8 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
                 <h2 className="text-xl font-bold text-gray-900">Active Booking</h2>
                 <span className="px-3 py-1 text-sm font-semibold text-green-700 bg-green-100 border border-green-300">
                   {activeBooking?.status || "Active"}
                 </span>
               </div>
 
-              <div className="bg-gray-50 border border-gray-200 p-6">
+              <div className="bg-gray-50 rounded-lg border border-gray-200 p-4 sm:p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                   <div className="flex items-start gap-3">
                     <div className="mt-0.5 text-[#B35A38]"><CheckCircle size={18} /></div>
                     <div>
                       <p className="text-gray-500">Booking ID</p>
-                      <p className="font-semibold text-gray-900">{activeBooking?.id || bookingId}</p>
+                      <p className="font-semibold text-gray-900 break-all">{activeBooking?.id || bookingId}</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
@@ -1168,31 +1244,31 @@ Thank you for booking with us!
               </div>
             </section>
 
-            <section className="bg-white border border-gray-300 p-8">
-              <div className="flex items-center justify-between mb-4">
+            <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-8 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold text-gray-900">Reserve Booking Payment</h2>
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 border border-green-200 px-2.5 py-1 rounded-full uppercase tracking-wider">
                   <Shield size={11} /> Refundable 24hrs
                 </span>
               </div>
-              <div className="border border-gray-200 bg-gray-50 p-5 space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 sm:p-5 space-y-3">
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                   <p className="text-gray-600">Total Trip Price</p>
                   <p className="text-xl font-bold text-gray-900">{formatKesFromCents(activeBooking?.totalPriceAmount || 0)}</p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                   <p className="text-gray-600">Distance</p>
                   <p className="font-semibold text-gray-900">{activeBooking?.distanceKm || 0} km</p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                   <p className="text-gray-600">Reservation Fee</p>
                   <p className="text-xl font-bold text-gray-900">{formatKesFromCents(activeBooking?.reservationAmount || 0)}</p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                   <p className="text-gray-600">Final Payment (on trip confirmation)</p>
                   <p className="font-semibold text-gray-900">{formatKesFromCents(activeBooking?.finalPaymentAmount || 0)}</p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2">
                   <p className="text-gray-600">Payment Status</p>
                   <span
                     className={`px-3 py-1 text-xs font-semibold border uppercase ${
@@ -1214,7 +1290,7 @@ Thank you for booking with us!
 
               {paymentFeedback && (
                 <div
-                  className={`p-4 mt-4 border ${
+                  className={`rounded-lg p-4 mt-4 border shadow-[0_8px_20px_rgba(15,23,42,0.04)] ${
                     paymentFeedback.type === "success"
                       ? "bg-green-50 border-green-400 text-green-700"
                       : "bg-red-50 border-red-400 text-red-700"
@@ -1228,7 +1304,7 @@ Thank you for booking with us!
                 type="button"
                 disabled={isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
                 onClick={handleReserveBookingPayment}
-                className="mt-5 inline-flex items-center gap-2 px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="mt-5 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_10px_24px_rgba(179,90,56,0.12)]"
               >
                 {isPaying ? <Loader size={18} className="animate-spin" /> : <CreditCard size={18} />}
                 {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
@@ -1237,18 +1313,40 @@ Thank you for booking with us!
               </button>
             </section>
 
-            <div className="flex flex-col md:flex-row gap-3">
+            {/* Booking Action Buttons - Show after reservation */}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:gap-3">
+              <a
+                href="/bookings"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(179,90,56,0.10)] text-sm"
+              >
+                <CheckCircle size={16} />
+                View My Bookings
+              </a>
+              <button
+                type="button"
+                disabled={isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
+                onClick={handleReserveBookingPayment}
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#B35A38] hover:bg-[#B35A38]/5 text-[#B35A38] font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              >
+                {isPaying ? <Loader size={16} className="animate-spin" /> : <CreditCard size={16} />}
+                {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
+                  ? "Payment Complete"
+                  : "Complete Payment"}
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-3 mt-4">
               <button
                 type="button"
                 onClick={handleBookAnother}
-                className="px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-colors"
+                className="rounded-lg px-6 py-3 bg-[#B35A38] hover:bg-[#8B4225] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_20px_rgba(179,90,56,0.10)]"
               >
                 Book Another Ride
               </button>
               <button
                 type="button"
                 onClick={onBack}
-                className="px-6 py-3 border border-gray-300 text-gray-900 hover:bg-gray-100 font-semibold transition-colors"
+                className="rounded-lg px-6 py-3 border border-gray-300 text-gray-900 hover:bg-gray-100 font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5"
               >
                 Back to Services
               </button>
@@ -1257,13 +1355,18 @@ Thank you for booking with us!
         )}
         </div>{/* end left panel */}
 
-        {/* RIGHT PANEL — Map */}
-        <div className="w-full lg:w-[420px] lg:min-w-[380px] flex-shrink-0">
-          <div className="lg:sticky lg:top-28 h-[300px] lg:h-[calc(100vh-140px)]">
+        {/* RIGHT PANEL — Map (Larger) */}
+        <div className="w-full lg:flex-1 flex-shrink-0">
+          <div className="lg:sticky lg:top-28 h-[300px] sm:h-[400px] lg:h-[calc(100vh-140px)]">
             <BookingMap
               pickupCoords={mapPickupCoords}
               destinationCoords={mapDestCoords}
               gpsCoords={pickupGps}
+              pickupField={resolvedLocationFields.pickupField}
+              destinationField={resolvedLocationFields.dropoffField}
+              activeField={activeLocationField}
+              onActiveFieldChange={setActiveLocationField}
+              onLocationPick={handleMapLocationPick}
             />
           </div>
         </div>

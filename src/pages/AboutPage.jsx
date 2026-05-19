@@ -13,6 +13,7 @@ import {
   Compass
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import Navbar from "../components/Navbar";
 import BackButton from "../components/BackButton";
 
 const stats = [
@@ -33,6 +34,7 @@ export default function AboutPage() {
 
   return (
     <div className="bg-[#050505] min-h-screen text-white font-sans selection:bg-[#C5A059] selection:text-black overflow-hidden">
+      <Navbar />
       <BackButton />
 
       {/* 1. CINEMATIC HERO */}

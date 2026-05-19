@@ -1,9 +1,15 @@
 import PaystackPop from "@paystack/inline-js";
 
 export const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+export const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
 
 export const KES_CENTS_PER_KM = 43 * 100;
 const RESERVATION_PERCENTAGE = 0.3;
+const MAPBOX_GEOCODING_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places";
+const MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving";
+const KENYA_BBOX = "33.501,-4.899,41.899,5.430";
+const NAIROBI_PROXIMITY = "36.8219,-1.2921";
+const MAPBOX_TYPES = "address,poi,place,locality,neighborhood";
 
 export function getReservationAmount(totalPriceCents) {
   return Math.round(totalPriceCents * RESERVATION_PERCENTAGE);
@@ -18,52 +24,144 @@ export function createPaymentReference(bookingId) {
   return `rk_${cleanBookingId}_${Date.now()}`;
 }
 
+function getMapboxToken() {
+  if (!MAPBOX_ACCESS_TOKEN) {
+    throw new Error("Missing VITE_MAPBOX_ACCESS_TOKEN. Add it to your .env.local file.");
+  }
+  return MAPBOX_ACCESS_TOKEN;
+}
+
+function normalizeMapboxFeature(feature) {
+  const [longitude, latitude] = feature.center || [];
+  const contextLabel = Array.isArray(feature.context)
+    ? feature.context.map((item) => item.text).filter(Boolean).join(", ")
+    : "";
+  const label = feature.place_name || [feature.text, contextLabel].filter(Boolean).join(", ");
+
+  return {
+    label,
+    shortLabel: feature.text || label,
+    latitude: Number(latitude),
+    longitude: Number(longitude)
+  };
+}
+
 export async function geocodeLocation(query) {
   if (!query?.trim()) throw new Error("Location is required for distance calculation.");
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=ke&q=${encodeURIComponent(query)}`;
-  const response = await fetch(url, {
-    headers: { "Accept-Language": "en", "User-Agent": "roam-kenya-app/1.0" }
+  const params = new URLSearchParams({
+    access_token: getMapboxToken(),
+    autocomplete: "true",
+    bbox: KENYA_BBOX,
+    country: "ke",
+    language: "en",
+    limit: "1",
+    proximity: NAIROBI_PROXIMITY,
+    types: MAPBOX_TYPES
   });
+  const url = `${MAPBOX_GEOCODING_URL}/${encodeURIComponent(query)}.json?${params.toString()}`;
+  const response = await fetch(url);
   if (!response.ok) throw new Error("Unable to geocode location.");
   const data = await response.json();
-  if (!Array.isArray(data) || data.length === 0) {
+  if (!Array.isArray(data?.features) || data.features.length === 0) {
     throw new Error(`Location not found: ${query}`);
   }
-  return {
-    latitude: Number(data[0].lat),
-    longitude: Number(data[0].lon),
-    label: data[0].display_name
-  };
+  return normalizeMapboxFeature(data.features[0]);
 }
 
 export async function searchKenyaLocations(query) {
   if (!query?.trim() || query.trim().length < 3) return [];
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&countrycodes=ke&q=${encodeURIComponent(query)}`;
-  const response = await fetch(url, {
-    headers: { "Accept-Language": "en", "User-Agent": "roam-kenya-app/1.0" }
-  });
-  if (!response.ok) throw new Error("Unable to fetch location suggestions.");
-  const data = await response.json();
-  if (!Array.isArray(data)) return [];
-  return data.map((item) => ({
-    label: item.display_name,
-    shortLabel: item.name || item.display_name,
-    latitude: Number(item.lat),
-    longitude: Number(item.lon)
-  }));
+  
+  try {
+    const params = new URLSearchParams({
+      access_token: getMapboxToken(),
+      autocomplete: "true",
+      bbox: KENYA_BBOX,
+      country: "ke",
+      language: "en",
+      limit: "8",
+      proximity: NAIROBI_PROXIMITY,
+      // Prioritize specific location types
+      types: "address,place,locality,neighborhood,region",
+      // Fuzzy matching for better results
+      fuzzyMatch: "true"
+    });
+    
+    const url = `${MAPBOX_GEOCODING_URL}/${encodeURIComponent(query)}.json?${params.toString()}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.warn("Mapbox API error:", response.status);
+      return [];
+    }
+    
+    const data = await response.json();
+    
+    if (!Array.isArray(data?.features)) {
+      return [];
+    }
+    
+    // Filter results to ensure they're within Kenya
+    const kenyaResults = data.features.filter(feature => {
+      if (!feature.center || feature.center.length < 2) return false;
+      const [lng, lat] = feature.center;
+      // Check if within Kenya bounds
+      return lng >= 33.5 && lng <= 42.0 && lat >= -4.9 && lat <= 5.5;
+    });
+    
+    return kenyaResults.map(normalizeMapboxFeature);
+  } catch (error) {
+    console.error("Location search error:", error);
+    return [];
+  }
 }
 
 export async function reverseGeocodeLocation({ latitude, longitude }) {
-  const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(latitude)}&lon=${encodeURIComponent(longitude)}`;
-  const response = await fetch(url, {
-    headers: { "Accept-Language": "en", "User-Agent": "roam-kenya-app/1.0" }
-  });
-  if (!response.ok) throw new Error("Unable to reverse geocode location.");
-  const data = await response.json();
-  return {
-    label: data?.display_name || `${latitude}, ${longitude}`,
-    shortLabel: data?.name || data?.display_name || `${latitude}, ${longitude}`
-  };
+  if (!latitude || !longitude) {
+    throw new Error("Invalid coordinates provided.");
+  }
+  
+  try {
+    // Check if coordinates are within Kenya
+    if (longitude < 33.5 || longitude > 42.0 || latitude < -4.9 || latitude > 5.5) {
+      console.warn("Coordinates outside Kenya bounds:", { latitude, longitude });
+    }
+    
+    const params = new URLSearchParams({
+      access_token: getMapboxToken(),
+      country: "ke",
+      language: "en",
+      // Include all types for reverse geocoding
+      types: "address,place,locality,neighborhood,region"
+    });
+    
+    const url = `${MAPBOX_GEOCODING_URL}/${longitude},${latitude}.json?${params.toString()}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      console.warn("Mapbox reverse geocoding error:", response.status);
+      throw new Error("Unable to reverse geocode location.");
+    }
+    
+    const data = await response.json();
+    const fallback = `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`;
+    
+    if (!Array.isArray(data?.features) || data.features.length === 0) {
+      // Return coordinates as fallback with a note
+      return {
+        label: fallback,
+        shortLabel: `Location (${fallback})`
+      };
+    }
+    
+    return normalizeMapboxFeature(data.features[0]);
+  } catch (error) {
+    console.error("Reverse geocoding error:", error);
+    const fallback = `${Number(latitude).toFixed(6)}, ${Number(longitude).toFixed(6)}`;
+    return {
+      label: fallback,
+      shortLabel: `Location (${fallback})`
+    };
+  }
 }
 
 export function calculateDistanceKm(start, end) {
@@ -97,10 +195,36 @@ export const VEHICLE_MULTIPLIERS = {
   "Limousine": 8.0
 };
 
+async function calculateMapboxDrivingDistanceKm(start, end) {
+  const coordinates = `${start.longitude},${start.latitude};${end.longitude},${end.latitude}`;
+  const params = new URLSearchParams({
+    access_token: getMapboxToken(),
+    alternatives: "false",
+    overview: "false"
+  });
+  const response = await fetch(`${MAPBOX_DIRECTIONS_URL}/${coordinates}?${params.toString()}`);
+  if (!response.ok) throw new Error("Unable to calculate driving distance.");
+  const data = await response.json();
+  const distanceMeters = data?.routes?.[0]?.distance;
+
+  if (!Number.isFinite(distanceMeters)) {
+    throw new Error("Driving distance was not returned.");
+  }
+
+  return distanceMeters / 1000;
+}
+
 export async function calculateTripPricing({ startQuery, endQuery, startCoords, endCoords, vehicleType = "Economy Sedan" }) {
   const startPoint = startCoords ?? (await geocodeLocation(startQuery));
   const endPoint = endCoords ?? (await geocodeLocation(endQuery));
-  const distanceKm = calculateDistanceKm(startPoint, endPoint);
+  let distanceKm;
+
+  try {
+    distanceKm = await calculateMapboxDrivingDistanceKm(startPoint, endPoint);
+  } catch (error) {
+    console.error("Mapbox directions error:", error);
+    distanceKm = calculateDistanceKm(startPoint, endPoint);
+  }
   
   const multiplier = VEHICLE_MULTIPLIERS[vehicleType] || 1.0;
   
