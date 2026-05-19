@@ -9,7 +9,7 @@ import Hero from "./components/Hero";
 import AboutTeaser from "./components/AboutTeaser";
 import Packages from "./components/Packages";
 import Features from "./components/Features";
-//import Deals from "./components/Deals";
+
 import CTA from "./components/CTA";
 import Footer from "./components/Footer";
 import BookingForm from "./components/BookingForm";
@@ -17,7 +17,7 @@ import AuthPage from './pages/AuthPage';
 import Destination from "./pages/Destination";
 import AboutPage from "./pages/AboutPage"; 
 import Services from './pages/Services';
-import AuthPage from "./pages/AuthPage";
+
 import BookingPage from "./pages/BookingPage";
 import MyBookingsPage from "./pages/MyBookingsPage";
 import ProfileSettingsPage from "./pages/ProfileSettingsPage";
@@ -55,7 +55,7 @@ function App() {
                   <AboutTeaser />
                   <Packages />
                   <Features /> 
-                  <Deals />
+                
                   <CTA />
                 </>
               } />

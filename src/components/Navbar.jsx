@@ -1,36 +1,45 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { HashLink } from "react-router-hash-link";
-import { Menu, X, ChevronDown, User } from "lucide-react";
+import { Menu, X, ChevronDown, User, Sun, Moon } from "lucide-react";
 import { useAuthContext } from "../context/AuthContext";
 import LoginModal from "./LoginModal";
 import UserProfile from "./UserProfile";
 
 export default function Navbar() {
-  const [isScrolled, setIsScrolled] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  
+  // Theme Toggle State (Defaults to Light)
+  const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
+
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuthContext();
-  const isHomePage = location.pathname === "/";
-  const useLightNavbar = !isHomePage;
-  const navTextClass = useLightNavbar ? "text-gray-900 hover:text-[#B35A38]" : "text-white hover:text-[#C5A059]";
+  
+  const authContext = useAuthContext();
+  const user = authContext ? authContext.user : null;
 
+  // Apply the theme to the HTML document body
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+    if (theme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(theme === "light" ? "dark" : "light");
+  };
 
   // Close mobile menu when route changes
   useEffect(() => {
-  const timer = setTimeout(() => {
-    setIsOpen(false);
-  }, 0);
-  
-  return () => clearTimeout(timer);
-}, [location.pathname, location.hash]);
+    const timer = setTimeout(() => {
+      setIsOpen(false);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.hash]);
 
   const serviceItems = [
     { name: "Airport Transfers", hash: "/services#transfers" },
@@ -39,103 +48,162 @@ export default function Navbar() {
     { name: "Fleet Management", hash: "/services#fleet" },
   ];
 
-  return (
-    <nav className={`fixed w-full z-[3000] transition-all duration-500 ${
-      useLightNavbar
-        ? "bg-white py-3 shadow-md border-b border-gray-200"
-        : isScrolled
-          ? "bg-black/90 py-3 shadow-2xl"
-          : "bg-transparent py-6"
-    }`}>
-      <div className="max-w-[1440px] mx-auto px-6 md:px-12 flex justify-between items-center">
-        
-        {/* LOGO  */}
-        <Link to="/" className="flex items-center">
-          <img 
-            src="/jts-logoo.png" 
-            alt="Jamupet Transit"
-            width="156"
-            height="80"
-            className="h-16 md:h-20 w-auto object-contain"
-          />
-        </Link>
+  // Helper function for active link highlighting
+  const getLinkClass = (path) => {
+    const isActive = location.pathname === path;
+    return `text-[10px] uppercase tracking-[0.2em] font-bold transition-all duration-300 pb-1 ${
+      isActive 
+        ? "text-[#C5A059] border-b-2 border-[#C5A059]" 
+        : "text-white hover:text-[#C5A059] border-b-2 border-transparent"
+    }`;
+  };
 
-        {/* DESKTOP LINKS */}
-        <div className="hidden md:flex items-center gap-8">
-          <Link to="/" className={`text-[11px] uppercase tracking-[0.2em] font-bold ${location.pathname === "/" ? "text-[#C5A059]" : navTextClass}`}>Home</Link>
-          <Link to="/about" className={`${navTextClass} text-[11px] uppercase tracking-[0.2em] font-bold`}>About</Link>
+  return (
+    <>
+      {/* Permanently Dark Header for Logo Visibility.
+        Changed from 'fixed' to 'absolute top-0' to remove fixed positioning per requirements.
+      */}
+      <nav className="absolute top-0 left-0 w-full z-[3000] bg-[#050505] py-4 border-b border-white/10 shadow-2xl">
+        <div className="max-w-[1440px] mx-auto px-6 md:px-12 flex justify-between items-center">
           
-          <div className="group relative">
-            <HashLink to="/services" className={`${navTextClass} text-[11px] uppercase tracking-[0.2em] font-bold flex items-center gap-1`}>
-              Services <ChevronDown size={12} />
-            </HashLink>
-            <div className="absolute hidden group-hover:block w-56 bg-black/95 top-full left-0 pt-4">
-              <div className="flex flex-col border-t border-[#C5A059] bg-[#111]">
-                {serviceItems.map((item) => (
-                  <HashLink key={item.name} smooth to={item.hash} className="p-3 text-[10px] uppercase tracking-widest text-white hover:bg-[#C5A059]">
-                    {item.name}
-                  </HashLink>
-                ))}
+          {/* LOGO */}
+          <Link to="/" className="flex items-center group">
+            <img 
+              src="/jts-logoo.png" 
+              alt="Jamupet Transit"
+              width="156"
+              height="80"
+              className="h-12 md:h-16 w-auto object-contain group-hover:opacity-80 transition-opacity"
+            />
+          </Link>
+
+          {/* DESKTOP NAVIGATION */}
+          <div className="hidden lg:flex items-center gap-8">
+            
+            <div className="flex items-center gap-8 mr-4 mt-1">
+              <Link to="/" className={getLinkClass("/")}>Home</Link>
+              <Link to="/about" className={getLinkClass("/about")}>About</Link>
+              
+              {/* Animated Dropdown Menu for Services */}
+              <div className="group relative">
+                <HashLink to="/services" className={`flex items-center gap-1 ${getLinkClass("/services")}`}>
+                  Services <ChevronDown size={12} className="group-hover:rotate-180 transition-transform duration-300" />
+                </HashLink>
+                
+                <div className="absolute top-full left-0 w-full h-6" />
+                
+                <div className="absolute hidden group-hover:block w-56 top-full left-0 pt-4 z-50">
+                  <div className="flex flex-col rounded-xl overflow-hidden shadow-2xl border bg-[#111] border-white/10">
+                    {serviceItems.map((item) => (
+                      <HashLink 
+                        key={item.name} 
+                        smooth 
+                        to={item.hash} 
+                        className="p-4 text-[10px] uppercase tracking-widest transition-colors text-gray-400 hover:text-[#C5A059] hover:bg-white/5 border-b border-white/5"
+                      >
+                        {item.name}
+                      </HashLink>
+                    ))}
+                  </div>
+                </div>
               </div>
+
+              <Link to="/destinations" className={getLinkClass("/destinations")}>Destinations</Link>
             </div>
 
-            <Link to="/destinations" className={`text-[10px] uppercase tracking-[0.2em] font-bold transition-colors ${location.pathname === "/destinations" ? "text-[#C5A059]" : "text-white hover:text-[#C5A059]"}`}>
-              Destinations
-            </Link>
-            <Link to="/auth" className={`text-[10px] uppercase tracking-[0.2em] font-bold transition-colors ${location.pathname === "/auth" ? "text-[#C5A059]" : "text-white hover:text-[#C5A059]"}`}>
-                 Client Login
-                  </Link>
-            
-            <button 
-              onClick={() => navigate("/booking")}
-              className="bg-[#C5A059] text-black px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] hover:bg-white hover:shadow-[0_0_20px_rgba(197,160,89,0.3)] transition-all duration-300"
-            >
+            {/* ACTION BUTTONS */}
+            <div className="flex items-center gap-4 border-l border-gray-600/50 pl-8">
               
+              {/* Theme Toggle */}
+              <button 
+                onClick={toggleTheme}
+                className="p-2.5 rounded-full border border-white/20 bg-white/5 text-gray-400 hover:text-[#C5A059] hover:border-[#C5A059] transition-all duration-300"
+                title="Toggle Theme"
+              >
+                {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
+              </button>
+
+              <button 
+                onClick={() => navigate("/booking")}
+                className="px-8 py-3 rounded-xl text-[10px] font-bold uppercase tracking-[0.2em] transition-all duration-300 shadow-lg bg-[#C5A059] text-black hover:bg-white hover:shadow-[0_0_20px_rgba(197,160,89,0.3)]"
+              >
+                Book Now
+              </button>
+
+              {user ? (
+                <UserProfile />
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="group relative flex items-center justify-center p-2.5 rounded-full border transition-all duration-300 hover:scale-105 bg-white/5 border-white/20 hover:border-[#C5A059] hover:bg-[#C5A059]/10"
+                  title="Client Login"
+                >
+                  <User size={18} className="text-white group-hover:text-[#C5A059] transition-colors" />
+                </button>
+              )}
+            </div>
+
+          </div>
+
+          {/* MOBILE MENU TOGGLE */}
+          <button 
+            className="lg:hidden text-white hover:text-[#C5A059] transition-colors" 
+            onClick={() => setIsOpen(!isOpen)}
+          >
+            {isOpen ? <X size={28} /> : <Menu size={28} />}
+          </button>
+        </div>
+      </nav>
+
+      {/* FULL SCREEN MOBILE MENU OVERLAY */}
+      <div className={`fixed inset-0 z-[2999] flex flex-col justify-center items-center bg-[#050505]/95 backdrop-blur-2xl transition-all duration-500 ease-in-out ${
+        isOpen ? "opacity-100 visible" : "opacity-0 invisible pointer-events-none"
+      }`}>
+        
+        <div className="flex flex-col items-center gap-8 w-full px-6">
+          <Link to="/" className="text-2xl font-serif text-white hover:text-[#C5A059] transition-colors">Home</Link>
+          <Link to="/about" className="text-2xl font-serif text-white hover:text-[#C5A059] transition-colors">About Us</Link>
+          
+          <div className="w-12 h-[1px] my-2 bg-white/10" />
+          
+          <Link to="/services" className="text-2xl font-serif text-[#C5A059]">Our Services</Link>
+          {serviceItems.map((item) => (
+            <HashLink key={item.name} smooth to={item.hash} onClick={() => setIsOpen(false)} className="text-sm font-light uppercase tracking-widest text-gray-400 hover:text-white">
+              {item.name}
+            </HashLink>
+          ))}
+          
+          <div className="w-12 h-[1px] my-2 bg-white/10" />
+          
+          <Link to="/destinations" className="text-2xl font-serif text-white hover:text-[#C5A059] transition-colors">Destinations</Link>
+          
+          <div className="flex flex-col gap-4 mt-8 w-full max-w-[250px]">
+            <button 
+              onClick={() => {
+                setIsOpen(false);
+                setShowLoginModal(true);
+              }}
+              className="w-full py-4 rounded-2xl text-xs font-bold uppercase tracking-[0.2em] transition-all border bg-transparent border-white/20 text-white hover:bg-white/10"
+            >
+              Client Login
+            </button>
+            <button 
+              onClick={() => {
+                setIsOpen(false);
+                navigate("/booking");
+              }}
+              className="w-full py-4 rounded-2xl text-xs font-bold uppercase tracking-[0.2em] transition-all shadow-lg bg-[#C5A059] text-black hover:bg-white"
+            >
               Book Now
             </button>
           </div>
-
-          <Link to="/destinations" className={`${navTextClass} text-[11px] uppercase tracking-[0.2em] font-bold`}>Destinations</Link>
-          
-          <button 
-            onClick={() => {
-              setIsOpen(false);
-              navigate("/booking");
-            }}
-            className="mt-8 bg-[#C5A059] text-black w-full max-w-[200px] py-4 rounded-2xl text-xs font-bold uppercase tracking-[0.2em] hover:bg-white transition-all"
-          >
-            Book Now
-          </button>
-
-          {/* Person Illustration Login Icon */}
-          {user ? (
-            <UserProfile />
-          ) : (
-            <button
-              onClick={() => setShowLoginModal(true)}
-              className={`group relative flex items-center justify-center p-3 rounded-full border transition-all duration-300 ${
-                useLightNavbar
-                  ? "bg-white border-[#B35A38] hover:bg-[#B35A38]"
-                  : "bg-black/20 border-[#C5A059]/40 hover:bg-[#B35A38]"
-              }`}
-              title="Login / Sign Up"
-            >
-              <User
-                size={24}
-                className={`transition-colors ${useLightNavbar ? "text-[#B35A38] group-hover:text-white" : "text-white group-hover:text-white"}`}
-              />
-            </button>
-          )}
         </div>
-
-        {/* Mobile Toggle */}
-        <button className={`md:hidden ${useLightNavbar ? "text-gray-900" : "text-white"}`} onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <X size={28} /> : <Menu size={28} />}
-        </button>
       </div>
 
-      {/* Login Modal */}
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
-    </nav>
+      {/* Login Modal Component */}
+      {showLoginModal && (
+        <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      )}
+    </>
   );
 }

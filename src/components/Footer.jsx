@@ -8,9 +8,8 @@ import {
 export default function Footer() {
   const navigate = useNavigate();
   
-  // State for the Subscribe Form
   const [email, setEmail] = useState("");
-  const [subStatus, setSubStatus] = useState("idle"); // 'idle', 'loading', 'success'
+  const [subStatus, setSubStatus] = useState("idle");
 
   const handleSubscribe = (e) => {
     e.preventDefault();
@@ -18,12 +17,9 @@ export default function Footer() {
     
     setSubStatus("loading");
     
-    // Simulate network request (You can hook this up to Supabase later!)
     setTimeout(() => {
       setSubStatus("success");
       setEmail("");
-      
-      // Reset back to normal after 3 seconds
       setTimeout(() => setSubStatus("idle"), 3000);
     }, 1500);
   };
@@ -36,7 +32,7 @@ export default function Footer() {
 
   return (
     <>
-      <footer className="bg-[#050505] text-white pt-24 pb-8 border-t border-white/10 relative overflow-hidden">
+      <footer className="bg-[#050505] text-white pt-24 pb-8 border-t-[4px] border-[#C5A059] relative overflow-hidden">
         
         {/* Subtle Background Glow */}
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#B35A38]/5 rounded-full blur-[150px] pointer-events-none translate-y-1/2 -translate-x-1/2" />
@@ -86,11 +82,13 @@ export default function Footer() {
           {/* MAIN FOOTER GRID */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-16">
             
-            {/* Brand Column */}
             <div className="space-y-6">
               <div>
-                <h2 className="text-2xl font-bold text-white tracking-wide">JAMUPET</h2>
-                <span className="text-[#C5A059] text-[9px] uppercase tracking-[0.3em] font-bold block mt-1">Transit Solutions</span>
+                <img 
+                  src="/jts-logoo.png" 
+                  alt="Jamupet Transit"
+                  className="h-14 w-auto object-contain mb-4"
+                />
               </div>
               <p className="text-gray-400 text-sm leading-relaxed font-light pr-4">
                 Redefining East African travel. We provide discreet, reliable, and premium chauffeur services tailored to the highest global standards.
@@ -103,7 +101,6 @@ export default function Footer() {
               </div>
             </div>
 
-            {/* Quick Links */}
             <div>
               <h4 className="text-white font-bold mb-6 tracking-wider">Quick Links</h4>
               <ul className="space-y-4">
@@ -115,7 +112,6 @@ export default function Footer() {
               </ul>
             </div>
 
-            {/* Contact Info */}
             <div>
               <h4 className="text-white font-bold mb-6 tracking-wider">Contact Us</h4>
               <ul className="space-y-5">
@@ -140,14 +136,12 @@ export default function Footer() {
               </ul>
             </div>
 
-            {/* Trust & Payments */}
             <div>
               <h4 className="text-white font-bold mb-6 tracking-wider">Secure Payments</h4>
               <p className="text-gray-400 text-sm font-light mb-4">
                 We process local and international payments securely via mobile and cards.
               </p>
               
-              {/* INTERACTIVE Payment Badges */}
               <div className="flex flex-wrap gap-2 mb-6">
                 <PaymentBadge text="M-PESA" color="bg-green-600/10 text-green-500 border-green-600/30 hover:bg-green-600/20 hover:border-green-500" />
                 <PaymentBadge text="VISA" color="bg-blue-600/10 text-blue-400 border-blue-600/30 hover:bg-blue-600/20 hover:border-blue-400" />
@@ -162,7 +156,6 @@ export default function Footer() {
 
           </div>
 
-          {/* BOTTOM BAR */}
           <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-white/5 text-xs text-gray-500 font-light gap-4">
             <p>© {new Date().getFullYear()} Jamupet Transit Solutions. All rights reserved.</p>
             <div className="flex gap-6">
@@ -181,7 +174,6 @@ export default function Footer() {
         className="fixed bottom-6 right-6 z-50 bg-[#25D366] text-white p-4 rounded-full shadow-[0_0_20px_rgba(37,211,102,0.3)] hover:scale-110 hover:shadow-[0_0_30px_rgba(37,211,102,0.5)] transition-all duration-300 flex items-center justify-center group"
       >
         <MessageCircle size={28} />
-        {/* Tooltip that appears on hover */}
         <span className="absolute right-16 bg-white text-black text-xs font-bold px-4 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap pointer-events-none shadow-xl transform group-hover:-translate-x-2">
           Chat with us
         </span>
@@ -190,7 +182,6 @@ export default function Footer() {
   );
 }
 
-// Micro-component for Social Icons
 function SocialIcon({ icon }) {
   return (
     <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 hover:bg-[#C5A059] hover:text-black hover:border-[#C5A059] transition-all duration-300 cursor-pointer hover:-translate-y-1">
@@ -199,7 +190,6 @@ function SocialIcon({ icon }) {
   );
 }
 
-// Micro-component for Links
 function FooterLink({ text, onClick }) {
   return (
     <li>
@@ -214,7 +204,6 @@ function FooterLink({ text, onClick }) {
   );
 }
 
-// Micro-component for Payment Badges (Now interactive)
 function PaymentBadge({ text, color }) {
   return (
     <div className={`px-3 py-1.5 rounded text-[10px] font-black tracking-wider border cursor-pointer transition-all duration-300 hover:-translate-y-1 ${color}`}>
