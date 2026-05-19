@@ -13,7 +13,6 @@ import {
   Compass
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../components/Navbar";
 import BackButton from "../components/BackButton";
 
 const stats = [
@@ -33,7 +32,8 @@ export default function AboutPage() {
   };
 
   return (
-    <div className="bg-[#050505] min-h-screen text-white font-sans selection:bg-[#C5A059] selection:text-black overflow-hidden">
+    // Base background is a very soft, warm pearl white (#FDFCFB) to match the gold branding
+    <div className="bg-[#FDFCFB] min-h-screen text-gray-900 font-sans selection:bg-[#C5A059] selection:text-white overflow-hidden">
       <BackButton />
 
       {/* 1. CINEMATIC HERO */}

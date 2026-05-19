@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { CheckCircle2, Building, TrendingUp, ShieldCheck, ArrowRight, Star } from "lucide-react";
-import Navbar from "../components/Navbar";
+import { CheckCircle2, Building, TrendingUp, ShieldCheck, ArrowRight, Star, Car, Users } from "lucide-react";
 import BackButton from "../components/BackButton";
 import ServiceFlipCards from "../components/Services/ServiceFlipCards";
 import ClientReviews from "../components/Services/ClientReviews";
@@ -37,14 +36,16 @@ export default function Services() {
     window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
   };
 
+  const handleFleetPartnership = () => {
+    const phoneNumber = "254705416781";
+    const message = "Hello Jamupet Transit, I own a premium vehicle and I am interested in your Fleet Management partnership.";
+    window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, "_blank");
+  };
+
   return (
-    <div className="bg-[#050505] min-h-screen text-white selection:bg-[#C5A059] selection:text-black">
-      <Navbar />
-    // Base background is the warm pearl-white to match the branding
     <div className="bg-[#FDFCFB] min-h-screen text-gray-900 selection:bg-[#C5A059] selection:text-white">
       <BackButton />
 
-      {/* INVISIBLE SEO FAQ SCHEMA */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
         "@context": "https://schema.org",
         "@type": "FAQPage",
@@ -76,17 +77,17 @@ export default function Services() {
         ]
       })}} />
 
-      {/* CINEMATIC HERO SECTION (Light Theme Frosted Glass) */}
-      <section className="pt-40 pb-24 relative overflow-hidden flex items-center">
+      {/* CINEMATIC HERO SECTION */}
+      <section className="pt-40 pb-24 relative overflow-hidden flex items-center min-h-[50vh]">
         <div className="absolute inset-0 z-0">
           <img 
-            src="/assets/suv.webp" 
+            src="/assets/Hotel-transfers.webp" 
             alt="Luxury Services" 
-            className="w-full h-full object-cover opacity-15 grayscale scale-105"
+            className="w-full h-full object-cover opacity-30 grayscale scale-105"
             onError={(e) => { e.target.src = "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?q=80&w=1920"; }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#FDFCFB] via-[#FDFCFB]/80 to-transparent" />
-          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#C5A059]/5 rounded-full blur-[150px] pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#FDFCFB] via-[#FDFCFB]/60 to-transparent" />
+          <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-[#C5A059]/10 rounded-full blur-[150px] pointer-events-none" />
         </div>
 
         <div className="max-w-7xl mx-auto px-6 relative z-10 w-full flex flex-col md:flex-row justify-between items-end gap-8">
@@ -98,17 +99,16 @@ export default function Services() {
               Our <span className="text-[#C5A059] italic font-light">Solutions.</span>
             </h1>
           </div>
-          <p className="text-gray-500 text-base md:text-lg font-light max-w-sm border-l-2 border-gray-300 pl-6 mb-2">
+          <p className="text-gray-600 text-base md:text-lg font-light max-w-sm border-l-2 border-[#C5A059]/30 pl-6 mb-2">
             Professional logistics for the discerning traveler, tourist, and elite property partner.
           </p>
         </div>
       </section>
 
       {/* 1. CORE SERVICES (FLIP CARDS) */}
-      {/* Note: Make sure to update the CSS inside ServiceFlipCards.jsx to use light colors too! */}
       <ServiceFlipCards />
 
-      {/* 2. DYNAMIC PRICING TABLE (Light Luxury Bento) */}
+      {/* 2. DYNAMIC PRICING TABLE */}
       <section className="py-32 px-6 relative" id="pricing">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-[#B35A38]/5 rounded-full blur-[150px] pointer-events-none" />
         
@@ -116,22 +116,21 @@ export default function Services() {
           <div className="text-center max-w-3xl mx-auto mb-20">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Designed for <span className="italic text-[#C5A059] font-light">Comfort & Style.</span></h2>
             <p className="text-gray-600 font-light leading-relaxed text-sm md:text-base">
-              Why compromise on quality when you can have both? We make it easy to <strong className="text-gray-900">save money with our rentals</strong> without sacrificing luxury. Whether you are looking for highly competitive, <strong className="text-gray-900">cheap rental transfer services</strong> or premium chauffeur rates for a multi-day safari, our pricing adapts to your specific needs.
+              Why compromise on quality when you can have both? We make it easy to <strong className="text-gray-900 font-medium">save money with our rentals</strong> without sacrificing luxury. Whether you are looking for highly competitive, <strong className="text-gray-900 font-medium">cheap rental transfer services</strong> or premium chauffeur rates for a multi-day safari, our pricing adapts to your specific needs.
             </p>
-            <p className="text-[#B35A38] text-[10px] font-bold uppercase tracking-[0.2em] mt-8 bg-[#B35A38]/5 border border-[#B35A38]/20 inline-block px-6 py-3 rounded-full">
+            <p className="text-[#B35A38] text-[10px] font-bold uppercase tracking-[0.2em] mt-8 bg-[#B35A38]/5 border border-[#B35A38]/10 inline-block px-6 py-3 rounded-full">
               Rates are flexible based on itinerary
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
-            
             {/* Standard Tier */}
             <div className="bg-white p-10 rounded-[2.5rem] border border-gray-100 relative group hover:-translate-y-2 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] hover:border-[#C5A059]/30 transition-all duration-500 shadow-sm">
               <h3 className="text-2xl font-bold text-gray-900 mb-2">Executive Sedan</h3>
               <p className="text-gray-500 text-sm mb-8 font-light">Perfect for city meetings & airport drops.</p>
               <div className="mb-10">
                 <span className="text-4xl font-black text-gray-900">Flexible</span>
-                <span className="text-gray-500 text-xs tracking-widest uppercase block mt-2">Hourly & Airport Rates</span>
+                <span className="text-gray-400 text-xs tracking-widest uppercase block mt-2">Hourly & Airport Rates</span>
               </div>
               <ul className="space-y-4 mb-10">
                 {['Up to 3 Passengers', 'Pristine, air-conditioned comfort', 'Professional Chauffeur', 'Complimentary Bottled Water'].map((feature, i) => (
@@ -154,7 +153,7 @@ export default function Services() {
               <p className="text-gray-500 text-sm mb-8 font-light text-center">Ideal for intercity rides & corporate teams.</p>
               <div className="mb-10 text-center">
                 <span className="text-5xl font-black text-[#C5A059]">Custom</span>
-                <span className="text-gray-500 text-xs tracking-widest uppercase block mt-3">Daily / Hourly available</span>
+                <span className="text-gray-400 text-xs tracking-widest uppercase block mt-3">Daily / Hourly available</span>
               </div>
               <ul className="space-y-4 mb-10">
                 {['Up to 7 Passengers', 'Superior legroom & luggage space', 'Elite, discreet chauffeurs', 'Free Wi-Fi & Refreshments', 'Priority Booking Status'].map((feature, i) => (
@@ -174,7 +173,7 @@ export default function Services() {
               <p className="text-gray-500 text-sm mb-8 font-light">Designed for special events & expeditions.</p>
               <div className="mb-10">
                 <span className="text-4xl font-black text-gray-900">Per Trip</span>
-                <span className="text-gray-500 text-xs tracking-widest uppercase block mt-2">Based on exact itinerary</span>
+                <span className="text-gray-400 text-xs tracking-widest uppercase block mt-2">Based on exact itinerary</span>
               </div>
               <ul className="space-y-4 mb-10">
                 {['Modified Safari Vans/Cruisers', 'Pristine Wedding Fleet', 'Expert driver-guides available', 'Custom Routing & Safaris'].map((feature, i) => (
@@ -191,10 +190,10 @@ export default function Services() {
         </div>
       </section>
 
-      {/* 3. PROPERTY PARTNERSHIP (Light Glassmorphism) */}
-      <section className="py-32 px-6 relative" id="hotels">
+      {/* 3. PROPERTY PARTNERSHIP (Hotels & Lodges) */}
+      <section className="py-16 px-6 relative" id="hotels">
         <div className="max-w-6xl mx-auto">
-          <div className="bg-white/80 backdrop-blur-xl rounded-[3rem] p-10 md:p-16 border border-gray-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-[#C5A059]/30 transition-colors duration-700">
+          <div className="bg-white/90 backdrop-blur-xl rounded-[3rem] p-10 md:p-16 border border-gray-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-[#C5A059]/30 transition-colors duration-700">
             <div className="absolute -top-24 -right-24 w-96 h-96 bg-[#C5A059] opacity-10 rounded-full blur-[100px] transition-all duration-700 group-hover:scale-110"></div>
             
             <div className="relative z-10 flex flex-col md:flex-row gap-16 items-center">
@@ -236,7 +235,53 @@ export default function Services() {
         </div>
       </section>
 
-      {/* 4. CLIENT REVIEWS SECTION */}
+      {/* 4. FLEET MANAGEMENT PARTNERSHIP (New Section) */}
+      <section className="py-16 px-6 relative mb-16" id="fleet">
+        <div className="max-w-6xl mx-auto">
+          {/* Note: md:flex-row-reverse switches the layout for visual rhythm */}
+          <div className="bg-white/90 backdrop-blur-xl rounded-[3rem] p-10 md:p-16 border border-gray-100 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] relative overflow-hidden group hover:border-[#B35A38]/30 transition-colors duration-700">
+            <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-[#B35A38] opacity-10 rounded-full blur-[100px] transition-all duration-700 group-hover:scale-110"></div>
+            
+            <div className="relative z-10 flex flex-col md:flex-row-reverse gap-16 items-center">
+              <div className="flex-1 text-center md:text-left">
+                <span className="text-[#B35A38] font-bold tracking-[.3em] text-[10px] uppercase mb-4 block">Asset Management</span>
+                <h2 className="text-3xl md:text-5xl font-bold text-gray-900 mb-6 leading-tight font-serif">
+                  Turn Your Vehicle <br/>Into Revenue.
+                </h2>
+                <p className="text-gray-600 font-light leading-relaxed mb-10 text-sm md:text-base">
+                  Partner with Jamupet Transit to monetize your premium SUV, Van, or Executive Sedan. We handle the vetting, the driving, and the maintenance, ensuring your asset is protected while generating consistent, high-yield returns.
+                </p>
+                <button 
+                  onClick={handleFleetPartnership}
+                  className="bg-gray-900 text-white px-8 py-4 rounded-xl font-bold hover:bg-[#C5A059] transition-all flex items-center justify-center md:justify-start gap-3 w-full md:w-auto text-xs uppercase tracking-widest shadow-lg"
+                >
+                  Partner Your Vehicle <ArrowRight size={16} />
+                </button>
+              </div>
+
+              <div className="flex-1 w-full space-y-4">
+                <PartnerBenefit 
+                  icon={<ShieldCheck size={20} className="text-[#B35A38]" />}
+                  title="Comprehensive Protection"
+                  desc="Your vehicle is fully insured and monitored with state-of-the-art GPS tracking at all times."
+                />
+                <PartnerBenefit 
+                  icon={<Users size={20} className="text-[#B35A38]" />}
+                  title="Driven by Professionals"
+                  desc="Only our elite, rigorously vetted chauffeurs will ever get behind the wheel of your asset."
+                />
+                <PartnerBenefit 
+                  icon={<TrendingUp size={20} className="text-[#B35A38]" />}
+                  title="Transparent Payouts"
+                  desc="Access clear, itemized monthly reports of your vehicle's earnings and maintenance schedules."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. CLIENT REVIEWS SECTION */}
       <ClientReviews />
     </div>
   );

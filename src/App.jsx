@@ -11,6 +11,7 @@ import Packages from "./components/Packages";
 import Features from "./components/Features";
 
 import CTA from "./components/CTA";
+import FAQ from "./components/FAQ";
 import Footer from "./components/Footer";
 import BookingForm from "./components/BookingForm";
 import AuthPage from './pages/AuthPage';
@@ -55,8 +56,9 @@ function App() {
                   <AboutTeaser />
                   <Packages />
                   <Features /> 
-                
+                  <FAQ/>
                   <CTA />
+                  
                 </>
               } />
 
