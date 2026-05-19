@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, Truck, CreditCard, Navigation, Crosshair, Shield, Info } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, CreditCard, Navigation, Crosshair, Shield, Info } from "lucide-react";
 import BookingMap from "./BookingMap";
 import { useDatabase } from "../hooks/useDatabase";
 import { useAuthContext } from "../context/AuthContext";
@@ -29,26 +29,22 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
   const [paymentFeedback, setPaymentFeedback] = useState(null);
   const [pickupGps, setPickupGps] = useState(null);
 
-  // Service icons mapping
+    // Service icons mapping
   const serviceIcons = {
     "airport-transfer": Plane,
-    "chauffeur-rental": Car,
     "hotel-transfer": Hotel,
     "intercity-ride": MapPin,
     "wedding-travel": Heart,
     "safari-tour": Camera,
-    "fleet-management": Truck
   };
 
-  // Vehicle type options for each service
+    // Vehicle type options for each service
   const vehicleOptions = {
     "airport-transfer": ["Economy Sedan", "Executive Sedan", "SUV (7-seater)", "Luxury Car"],
-    "chauffeur-rental": ["Economy Sedan", "Executive Sedan", "SUV (7-seater)", "Luxury Car", "Van (10-seater)"],
     "hotel-transfer": ["Economy Sedan", "Executive Sedan", "SUV (7-seater)"],
     "intercity-ride": ["Economy Sedan", "Executive Sedan", "SUV (7-seater)", "Van (14-seater)"],
     "wedding-travel": ["Executive Sedan", "Luxury Car", "SUV (7-seater)", "Limousine"],
     "safari-tour": ["SUV (7-seater)", "Land Cruiser", "Safari Van (15-seater)"],
-    "fleet-management": ["Sedan", "SUV", "Van", "Truck"]
   };
 
   // Service-specific field configurations
@@ -63,18 +59,6 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
         { name: "time", label: "Pickup Time", type: "time", required: true },
         { name: "vehicleType", label: "Vehicle Type", type: "select", options: vehicleOptions["airport-transfer"], required: true },
         { name: "passengers", label: "Passengers", type: "number", min: 1, max: 10, required: true }
-      ]
-    },
-    "chauffeur-rental": {
-      label: "Chauffeur Rental",
-      fields: [
-        { name: "location", label: "Pickup Location", placeholder: "Where should we pick you up?", required: true },
-        { name: "startDate", label: "Start Date", type: "date", required: true },
-        { name: "startTime", label: "Start Time", type: "time", required: true },
-        { name: "endDate", label: "End Date", type: "date", required: true },
-        { name: "endTime", label: "End Time", type: "time", required: true },
-        { name: "vehicleType", label: "Vehicle Type", type: "select", options: vehicleOptions["chauffeur-rental"], required: true },
-        { name: "passengers", label: "Passengers", type: "number", min: 1, max: 6, required: true }
       ]
     },
     "hotel-transfer": {
@@ -102,7 +86,8 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
     "wedding-travel": {
       label: "Wedding Travel",
       fields: [
-        { name: "eventVenue", label: "Venue Name", placeholder: "Wedding venue", required: true },
+        { name: "pickup", label: "Pickup Location", placeholder: "Where should we pick you up?", required: true },
+        { name: "destination", label: "Destination / Venue", placeholder: "Wedding venue or drop-off location", required: true },
         { name: "eventDate", label: "Event Date", type: "date", required: true },
         { name: "eventTime", label: "Event Time", type: "time", required: true },
         { name: "vehicleType", label: "Vehicle Type", type: "select", options: vehicleOptions["wedding-travel"], required: true },
@@ -119,14 +104,6 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
         { name: "vehicleType", label: "Vehicle Type", type: "select", options: vehicleOptions["safari-tour"], required: true },
         { name: "duration", label: "Duration (Days)", type: "number", min: 1, max: 7, required: true },
         { name: "guestCount", label: "Guests", type: "number", min: 1, max: 20, required: true }
-      ]
-    },
-    "fleet-management": {
-      label: "Fleet Management",
-      fields: [
-        { name: "vehicleType", label: "Vehicle Type", type: "select", options: vehicleOptions["fleet-management"], required: true },
-        { name: "rentalPeriod", label: "Rental Period", placeholder: "e.g., Monthly, Weekly", required: true },
-        { name: "purpose", label: "Purpose", placeholder: "e.g., Business, Personal", required: true }
       ]
     }
   };
@@ -1026,18 +1003,29 @@ Thank you for booking with us!
                         <p className="text-sm font-bold text-gray-900">Trip Estimate</p>
                       </div>
                       {tripEstimate && (
-                        <span className="text-[10px] font-bold text-[#C5A059] bg-[#C5A059]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Live</span>
-                      )}
+                         <div className="flex items-center gap-1.5">
+                           {tripEstimate.usedRoadDistance && (
+                             <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">Via Roads</span>
+                           )}
+                           <span className="text-[10px] font-bold text-[#C5A059] bg-[#C5A059]/10 px-2 py-0.5 rounded-full uppercase tracking-wider">Live</span>
+                         </div>
+                       )}
                     </div>
                     <p className="text-xs text-gray-500">30% refundable reservation · Final payment after confirmation</p>
                   </div>
                   {tripEstimate ? (
                     <div className="px-4 pb-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
-                        <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
-                          <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Distance</p>
-                          <p className="text-lg font-black text-gray-900 mt-0.5">{tripEstimate.distanceKm}<span className="text-xs font-medium text-gray-400 ml-0.5">km</span></p>
-                        </div>
+                      <div className={`grid gap-2 text-center ${tripEstimate.durationMin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
+                         <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
+                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Road Dist.</p>
+                           <p className="text-lg font-black text-gray-900 mt-0.5">{tripEstimate.distanceKm}<span className="text-xs font-medium text-gray-400 ml-0.5">km</span></p>
+                         </div>
+                         {tripEstimate.durationMin && (
+                           <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
+                             <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Drive Time</p>
+                             <p className="text-lg font-black text-gray-900 mt-0.5">{tripEstimate.durationMin}<span className="text-xs font-medium text-gray-400 ml-0.5">min</span></p>
+                           </div>
+                         )}
                         <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Fare</p>
                           <p className="text-lg font-black text-gray-900 mt-0.5">{formatKesFromCents(tripEstimate.totalPriceCents)}</p>

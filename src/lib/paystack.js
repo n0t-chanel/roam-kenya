@@ -195,40 +195,54 @@ export const VEHICLE_MULTIPLIERS = {
   "Limousine": 8.0
 };
 
-async function calculateMapboxDrivingDistanceKm(start, end) {
+async function calculateMapboxDrivingRoute(start, end) {
   const coordinates = `${start.longitude},${start.latitude};${end.longitude},${end.latitude}`;
   const params = new URLSearchParams({
     access_token: getMapboxToken(),
     alternatives: "false",
-    overview: "false"
+    geometries: "geojson",
+    overview: "full",
+    steps: "false",
+    annotations: "duration,distance"
   });
   const response = await fetch(`${MAPBOX_DIRECTIONS_URL}/${coordinates}?${params.toString()}`);
-  if (!response.ok) throw new Error("Unable to calculate driving distance.");
+  if (!response.ok) throw new Error(`Mapbox Directions error: ${response.status}`);
   const data = await response.json();
-  const distanceMeters = data?.routes?.[0]?.distance;
+  const route = data?.routes?.[0];
 
-  if (!Number.isFinite(distanceMeters)) {
-    throw new Error("Driving distance was not returned.");
+  if (!route || !Number.isFinite(route.distance)) {
+    throw new Error("Driving route was not returned by Mapbox.");
   }
 
-  return distanceMeters / 1000;
+  return {
+    distanceKm: route.distance / 1000,
+    durationMin: Math.round(route.duration / 60)
+  };
 }
 
 export async function calculateTripPricing({ startQuery, endQuery, startCoords, endCoords, vehicleType = "Economy Sedan" }) {
   const startPoint = startCoords ?? (await geocodeLocation(startQuery));
   const endPoint = endCoords ?? (await geocodeLocation(endQuery));
   let distanceKm;
+  let durationMin = null;
+  let usedRoadDistance = false;
 
   try {
-    distanceKm = await calculateMapboxDrivingDistanceKm(startPoint, endPoint);
+    const routeResult = await calculateMapboxDrivingRoute(startPoint, endPoint);
+    distanceKm = routeResult.distanceKm;
+    durationMin = routeResult.durationMin;
+    usedRoadDistance = true;
+    console.log(`✅ Road distance: ${distanceKm.toFixed(1)} km, ~${durationMin} min drive`);
   } catch (error) {
-    console.error("Mapbox directions error:", error);
-    distanceKm = calculateDistanceKm(startPoint, endPoint);
+    console.warn("⚠️ Mapbox Directions failed, using straight-line fallback:", error.message);
+    // Multiply straight-line by 1.35 to better approximate road distance
+    const straightKm = calculateDistanceKm(startPoint, endPoint);
+    distanceKm = straightKm * 1.35;
   }
   
   const multiplier = VEHICLE_MULTIPLIERS[vehicleType] || 1.0;
   
-  // Base price 100 KES/km, min 100 KES (10000 cents)
+  // Base price: KES 43/km, minimum KES 100 (10000 cents)
   const basePriceCents = Math.max(10000, Math.round(distanceKm * KES_CENTS_PER_KM));
   const totalPriceCents = Math.round(basePriceCents * multiplier);
   
@@ -239,6 +253,8 @@ export async function calculateTripPricing({ startQuery, endQuery, startCoords, 
     startPoint,
     endPoint,
     distanceKm: Number(distanceKm.toFixed(2)),
+    durationMin,
+    usedRoadDistance,
     basePriceCents,
     totalPriceCents,
     reservationFeeCents,

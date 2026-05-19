@@ -1,4 +1,4 @@
-import { Plane, Car, Hotel, MapPin, Heart, Camera, Truck } from "lucide-react";
+import { Plane, Hotel, MapPin, Heart, Camera } from "lucide-react";
 
 const SERVICES = [
   {
@@ -6,13 +6,6 @@ const SERVICES = [
     name: "Airport Transfers",
     description: "Punctual, stress-free arrivals at JKIA & Wilson.",
     icon: Plane,
-    iconColor: "#C5A059"
-  },
-  {
-    id: "chauffeur-rental",
-    name: "Chauffeur Rentals",
-    description: "Premium fleet with professional drivers for the day.",
-    icon: Car,
     iconColor: "#C5A059"
   },
   {
@@ -41,13 +34,6 @@ const SERVICES = [
     name: "Safari Tours",
     description: "Custom expeditions for locals and tourists.",
     icon: Camera,
-    iconColor: "#C5A059"
-  },
-  {
-    id: "fleet-management",
-    name: "Fleet Management",
-    description: "Turn your vehicle into a premium asset.",
-    icon: Truck,
     iconColor: "#C5A059"
   }
 ];
