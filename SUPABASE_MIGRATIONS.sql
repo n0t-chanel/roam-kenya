@@ -74,6 +74,28 @@ CREATE TABLE IF NOT EXISTS admin_users (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Create drivers table
+CREATE TABLE IF NOT EXISTS drivers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  email TEXT,
+  vehicle_type TEXT NOT NULL,
+  vehicle_plate TEXT,
+  status TEXT CHECK (status IN ('available', 'on_trip', 'off_duty')) DEFAULT 'available',
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Create booking_assignments table
+CREATE TABLE IF NOT EXISTS booking_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+  agent_id UUID REFERENCES admin_users(id),
+  driver_id UUID REFERENCES drivers(id),
+  assigned_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
@@ -89,6 +111,8 @@ ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flights ENABLE ROW LEVEL SECURITY;
 ALTER TABLE flight_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE booking_assignments ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for user_profiles
 DROP POLICY IF EXISTS "Users can view own profile" ON user_profiles;
@@ -161,6 +185,46 @@ DROP POLICY IF EXISTS "Admins can view own admin row" ON admin_users;
 CREATE POLICY "Admins can view own admin row" ON admin_users
   FOR SELECT USING (auth.uid() = user_id);
 
+-- RLS Policies for drivers
+DROP POLICY IF EXISTS "Agents can view available drivers" ON drivers;
+CREATE POLICY "Agents can view available drivers" ON drivers
+  FOR SELECT USING (
+    status = 'available'
+    AND EXISTS (
+      SELECT 1
+      FROM admin_users
+      WHERE admin_users.user_id = auth.uid()
+        AND admin_users.role IN ('super_admin', 'booking_agent')
+    )
+  );
+
+-- RLS Policies for booking_assignments
+DROP POLICY IF EXISTS "Agents can create assignments" ON booking_assignments;
+CREATE POLICY "Agents can create assignments" ON booking_assignments
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM admin_users
+      WHERE admin_users.user_id = auth.uid()
+        AND admin_users.role IN ('super_admin', 'booking_agent')
+    )
+  );
+
+DROP POLICY IF EXISTS "Drivers can view own assignments" ON booking_assignments;
+CREATE POLICY "Drivers can view own assignments" ON booking_assignments
+  FOR SELECT USING (driver_id = auth.uid());
+
+DROP POLICY IF EXISTS "Agents can view own assignments" ON booking_assignments;
+CREATE POLICY "Agents can view own assignments" ON booking_assignments
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM admin_users
+      WHERE admin_users.user_id = auth.uid()
+        AND admin_users.id = booking_assignments.agent_id
+    )
+  );
+
 -- Create function to update 'updated_at' timestamp automatically
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -201,3 +265,5 @@ GRANT SELECT ON flights TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON flight_bookings TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON user_profiles TO authenticated;
 GRANT SELECT ON admin_users TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON booking_assignments TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON drivers TO authenticated;
