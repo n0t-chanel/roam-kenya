@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { supabase } from '../../lib/supabase'
-import { supabaseAdmin } from '../../lib/supabaseAdmin'
 
 const ROLE_OPTIONS = [
   { label: 'Booking Agent', value: 'booking_agent' },
@@ -118,35 +117,37 @@ export default function AgentsManagement() {
 
     try {
       setFormError(null)
+      
       if (modalState.type === 'edit' && modalState.agent) {
         const { error: updateError } = await supabase
           .from('admin_users')
           .update({ name: formState.name.trim(), role: formState.role })
           .eq('id', modalState.agent.id)
+        
         if (updateError) throw updateError
       } else {
-        // NOTE: This requires the service role key; in production use a secure server/edge function.
-        const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
-          email: formState.email.trim(),
-          password: formState.password.trim(),
-          email_confirm: true,
-          user_metadata: { full_name: formState.name.trim() }
+        // Securely invoke the Edge Function
+        // Ensure 'create-agent' matches the name of the folder inside supabase/functions/
+        const { data, error: functionError } = await supabase.functions.invoke('create-agent', {
+          body: {
+            name: formState.name.trim(),
+            email: formState.email.trim(),
+            password: formState.password.trim(),
+            role: formState.role
+          }
         })
-        if (createError) throw createError
 
-        const { error: insertError } = await supabase.from('admin_users').insert({
-          user_id: created.user.id,
-          role: formState.role,
-          name: formState.name.trim(),
-          is_active: true
-        })
-        if (insertError) throw insertError
+        if (functionError) throw functionError
+        
+        if (!data?.success) {
+          throw new Error(data?.error || 'Failed to create agent.')
+        }
       }
 
       await loadAgents()
       closeModal()
     } catch (err) {
-      setFormError(err.message)
+      setFormError(err.message || 'An unexpected error occurred.')
     }
   }
 

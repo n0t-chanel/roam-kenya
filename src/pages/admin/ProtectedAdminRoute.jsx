@@ -1,37 +1,11 @@
-import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { getCurrentAdminRole } from '../../lib/adminAuth'
+import { useAdminAuth } from '../../context/AdminAuthContext'
 
 /**
  * Protects admin routes based on allowedRoles
  */
 export function ProtectedAdminRoute({ children, allowedRoles = [] }) {
-  const [role, setRole] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let isMounted = true
-
-    const loadRole = async () => {
-      try {
-        setLoading(true)
-        const currentRole = await getCurrentAdminRole()
-        if (!isMounted) return
-        setRole(currentRole)
-      } catch (err) {
-        if (!isMounted) return
-        setRole(null)
-      } finally {
-        if (isMounted) setLoading(false)
-      }
-    }
-
-    loadRole()
-
-    return () => {
-      isMounted = false
-    }
-  }, [])
+  const { role, loading } = useAdminAuth()
 
   if (loading) {
     return (
