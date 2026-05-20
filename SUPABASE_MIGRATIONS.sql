@@ -71,8 +71,14 @@ CREATE TABLE IF NOT EXISTS admin_users (
   user_id UUID REFERENCES auth.users ON DELETE CASCADE,
   role TEXT CHECK (role IN ('super_admin', 'booking_agent', 'driver')) NOT NULL,
   name TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE admin_users
+  ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+
+UPDATE admin_users SET is_active = TRUE WHERE is_active IS NULL;
 
 -- Create drivers table
 CREATE TABLE IF NOT EXISTS drivers (
@@ -96,6 +102,21 @@ CREATE TABLE IF NOT EXISTS booking_assignments (
   completed_at TIMESTAMPTZ
 );
 
+-- Create driver_performance table
+CREATE TABLE IF NOT EXISTS driver_performance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  driver_id UUID REFERENCES drivers(id) ON DELETE CASCADE,
+  trips_completed INT DEFAULT 0,
+  average_rating FLOAT DEFAULT 0,
+  on_time_rate FLOAT DEFAULT 0,
+  cancellation_rate FLOAT DEFAULT 0,
+  earnings_today NUMERIC DEFAULT 0,
+  earnings_week NUMERIC DEFAULT 0,
+  earnings_total NUMERIC DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(driver_id)
+);
+
 -- Create indexes for better query performance
 CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
@@ -113,6 +134,7 @@ ALTER TABLE flight_bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE booking_assignments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE driver_performance ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for user_profiles
 DROP POLICY IF EXISTS "Users can view own profile" ON user_profiles;
@@ -185,6 +207,27 @@ DROP POLICY IF EXISTS "Admins can view own admin row" ON admin_users;
 CREATE POLICY "Admins can view own admin row" ON admin_users
   FOR SELECT USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Super admins can manage admin users" ON admin_users;
+CREATE POLICY "Super admins can manage admin users" ON admin_users
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
+    )
+  );
+
 -- RLS Policies for drivers
 DROP POLICY IF EXISTS "Agents can view available drivers" ON drivers;
 CREATE POLICY "Agents can view available drivers" ON drivers
@@ -195,6 +238,27 @@ CREATE POLICY "Agents can view available drivers" ON drivers
       FROM admin_users
       WHERE admin_users.user_id = auth.uid()
         AND admin_users.role IN ('super_admin', 'booking_agent')
+    )
+  );
+
+DROP POLICY IF EXISTS "Super admins can manage drivers" ON drivers;
+CREATE POLICY "Super admins can manage drivers" ON drivers
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
     )
   );
 
@@ -210,6 +274,18 @@ CREATE POLICY "Agents can create assignments" ON booking_assignments
     )
   );
 
+DROP POLICY IF EXISTS "Super admins can view all assignments" ON booking_assignments;
+CREATE POLICY "Super admins can view all assignments" ON booking_assignments
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
+    )
+  );
+
 DROP POLICY IF EXISTS "Drivers can view own assignments" ON booking_assignments;
 CREATE POLICY "Drivers can view own assignments" ON booking_assignments
   FOR SELECT USING (driver_id = auth.uid());
@@ -222,6 +298,28 @@ CREATE POLICY "Agents can view own assignments" ON booking_assignments
       FROM admin_users
       WHERE admin_users.user_id = auth.uid()
         AND admin_users.id = booking_assignments.agent_id
+    )
+  );
+
+-- RLS Policies for driver_performance
+DROP POLICY IF EXISTS "Super admins can manage driver performance" ON driver_performance;
+CREATE POLICY "Super admins can manage driver performance" ON driver_performance
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM admin_users AS super_admins
+      WHERE super_admins.user_id = auth.uid()
+        AND super_admins.role = 'super_admin'
+        AND super_admins.is_active = TRUE
     )
   );
 
@@ -267,3 +365,4 @@ GRANT SELECT, INSERT, UPDATE ON user_profiles TO authenticated;
 GRANT SELECT ON admin_users TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON booking_assignments TO authenticated;
 GRANT SELECT, INSERT, UPDATE ON drivers TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON driver_performance TO authenticated;

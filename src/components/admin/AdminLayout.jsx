@@ -13,10 +13,11 @@ const NAV_ITEMS = [
 
 export default function AdminLayout({ children }) {
   const navigate = useNavigate()
-  const { user, signOut } = useAdminAuth()
+  const { user, role, signOut } = useAdminAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const userLabel = user?.user_metadata?.full_name || user?.email || 'Admin'
+  const roleLabel = role === 'super_admin' ? 'Super Admin' : role === 'booking_agent' ? 'Booking Agent' : role === 'driver' ? 'Driver' : null
 
   const handleSignOut = async () => {
     await signOut()
@@ -89,7 +90,14 @@ export default function AdminLayout({ children }) {
               <h1 className="text-lg font-semibold text-gray-900">Roam Kenya Admin</h1>
             </div>
             <div className="flex items-center gap-3">
-              <div className="hidden sm:block text-sm text-gray-600">{userLabel}</div>
+              <div className="hidden sm:flex items-center gap-2 text-sm text-gray-600">
+                <span>{userLabel}</span>
+                {roleLabel && (
+                  <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-[#B35A38]">
+                    {roleLabel}
+                  </span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleSignOut}

@@ -18,13 +18,18 @@ export async function signInAdmin(email, password) {
 
   const { data: adminUser, error: adminError } = await supabase
     .from('admin_users')
-    .select('role')
+    .select('role, is_active')
     .eq('user_id', user.id)
     .maybeSingle()
 
   if (adminError || !adminUser?.role) {
     await supabaseAuth.signOut()
     throw new Error(INVALID_CREDENTIALS_MESSAGE)
+  }
+
+  if (adminUser.is_active === false) {
+    await supabaseAuth.signOut()
+    throw new Error('Your account has been deactivated. Contact your administrator.')
   }
 
   return { user, role: adminUser.role }

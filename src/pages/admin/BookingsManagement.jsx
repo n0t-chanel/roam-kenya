@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import BookingModal from '../../components/admin/BookingModal'
+import { exportToCSV } from '../../lib/exportUtils'
 import {
   formatDateTime,
   getBookingDateTimeValue,
@@ -58,49 +59,17 @@ const getSortValue = (booking, key) => {
   }
 }
 
-const escapeCsvValue = (value) => {
-  const stringValue = value === undefined || value === null ? '' : String(value)
-  if (stringValue.includes('"') || stringValue.includes(',') || stringValue.includes('\n')) {
-    return `"${stringValue.replace(/"/g, '""')}"`
-  }
-  return stringValue
-}
-
-const buildCsv = (rows) => {
-  const header = [
-    'Booking ID',
-    'Customer Name',
-    'Customer Email',
-    'Customer Phone',
-    'Service',
-    'Date/Time',
-    'Status',
-    'Vehicle'
-  ]
-  const dataRows = rows.map((booking) => [
-    booking.id,
-    resolveCustomerName(booking),
-    resolveCustomerEmail(booking),
-    resolveCustomerPhone(booking),
-    resolveServiceType(booking),
-    formatDateTime(getBookingDateTimeValue(booking)),
-    getStatusLabel(booking.status),
-    resolveVehicle(booking)
-  ])
-  return [header, ...dataRows].map((row) => row.map(escapeCsvValue).join(',')).join('\n')
-}
-
-const downloadCsv = (content, fileName) => {
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.setAttribute('download', fileName)
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
+const buildExportRows = (rows) =>
+  rows.map((booking) => ({
+    booking_id: booking.id,
+    customer_name: resolveCustomerName(booking),
+    customer_email: resolveCustomerEmail(booking),
+    customer_phone: resolveCustomerPhone(booking),
+    service_type: resolveServiceType(booking),
+    pickup_datetime: formatDateTime(getBookingDateTimeValue(booking)),
+    status: getStatusLabel(booking.status),
+    vehicle_type: resolveVehicle(booking)
+  }))
 
 export default function BookingsManagement() {
   const { fetchBookings, subscribeToBookings } = useBookings()
@@ -227,9 +196,8 @@ export default function BookingsManagement() {
   }
 
   const exportRows = (rows) => {
-    const csv = buildCsv(rows)
     const dateStamp = new Date().toISOString().split('T')[0]
-    downloadCsv(csv, `roam-bookings-${dateStamp}.csv`)
+    exportToCSV(buildExportRows(rows), `roam-bookings-${dateStamp}.csv`)
   }
 
   const selectedRows = sortedBookings.filter((booking) => selectedIds.has(booking.id))
@@ -321,15 +289,15 @@ export default function BookingsManagement() {
                 >
                   Export Selected to CSV
                 </button>
-                <button
-                  type="button"
-                  onClick={() => exportRows(sortedBookings)}
-                  className="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-                >
-                  Export Filtered to CSV
-                </button>
               </>
             )}
+            <button
+              type="button"
+              onClick={() => exportRows(sortedBookings)}
+              className="rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
+              Export Filtered to CSV
+            </button>
           </div>
         </div>
 
