@@ -48,7 +48,14 @@ export default function DriversManagement() {
       setLoading(true)
       const { data, error: queryError } = await supabase
         .from('drivers')
-        .select('*, driver_performance (*)')
+        .select(`
+          *,
+          driver_performance (*),
+          booking_assignments (
+            id, assigned_at, completed_at,
+            bookings ( id, destination_location, destination, dropoff, dropoff_location, status )
+          )
+        `)
         .order('created_at', { ascending: false })
 
       if (queryError) throw queryError
@@ -181,10 +188,9 @@ export default function DriversManagement() {
     }
   }
 
-  const toggleAvailability = async (driver) => {
-    if (driver.status === 'on_trip') return
-    const nextStatus = driver.status === 'available' ? 'off_duty' : 'available'
-    const { error: updateError } = await supabase.from('drivers').update({ status: nextStatus }).eq('id', driver.id)
+  const setDriverStatus = async (driver, newStatus) => {
+    if (!newStatus || driver.status === newStatus) return
+    const { error: updateError } = await supabase.from('drivers').update({ status: newStatus }).eq('id', driver.id)
     if (updateError) {
       setError(updateError.message)
       return
@@ -294,6 +300,7 @@ export default function DriversManagement() {
                       Status
                     </button>
                   </th>
+                  <th className="px-4 py-3 text-left">Active Trip</th>
                   <th className="px-4 py-3 text-left">
                     <button type="button" onClick={() => toggleSort('trips')} className="font-semibold">
                       Trips Completed
@@ -306,19 +313,25 @@ export default function DriversManagement() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="8" className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan="9" className="px-4 py-6 text-center text-gray-500">
                       Loading drivers...
                     </td>
                   </tr>
                 ) : sortedDrivers.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-4 py-6 text-center text-gray-400">
+                    <td colSpan="9" className="px-4 py-6 text-center text-gray-400">
                       No drivers found.
                     </td>
                   </tr>
                 ) : (
                   sortedDrivers.map((driver) => {
                     const performance = getDriverPerformance(driver)
+                    const activeAssignment = driver.booking_assignments?.find(a => 
+                      !a.completed_at && 
+                      (a.bookings?.status === 'assigned' || a.bookings?.status === 'en_route')
+                    )
+                    const activeBooking = activeAssignment?.bookings
+
                     return (
                       <tr key={driver.id} className="border-t border-gray-100">
                         <td className="px-4 py-3 font-semibold text-gray-900">{driver.name}</td>
@@ -326,9 +339,28 @@ export default function DriversManagement() {
                         <td className="px-4 py-3 text-gray-600">{driver.vehicle_type}</td>
                         <td className="px-4 py-3 text-gray-600">{driver.vehicle_plate}</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_BADGES[driver.status] || 'bg-gray-100 text-gray-600'}`}>
-                            {driver.status?.replace('_', ' ')}
-                          </span>
+                          <select
+                            className={`px-2 py-1 rounded-full text-xs font-semibold focus:outline-none cursor-pointer border border-transparent hover:border-gray-300 ${STATUS_BADGES[driver.status] || 'bg-gray-100 text-gray-600'}`}
+                            value={driver.status || 'off_duty'}
+                            onChange={(e) => setDriverStatus(driver, e.target.value)}
+                          >
+                            <option value="available" className="bg-white text-gray-900">Available</option>
+                            <option value="on_trip" className="bg-white text-gray-900">On Trip</option>
+                            <option value="off_duty" className="bg-white text-gray-900">Off Duty</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">
+                          {activeBooking ? (
+                            <div className="text-xs">
+                              <span className="font-semibold text-[#B35A38]">#{activeBooking.id.slice(0,6).toUpperCase()}</span>
+                              <br />
+                              <span className="text-gray-500 truncate max-w-[120px] inline-block" title={activeBooking.destination || activeBooking.destination_location}>
+                                To: {activeBooking.destination || activeBooking.destination_location || '—'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-600">{performance.trips_completed ?? 0}</td>
                         <td className="px-4 py-3 text-gray-600">KES {Number(performance.earnings_total ?? 0).toLocaleString()}</td>
@@ -340,13 +372,6 @@ export default function DriversManagement() {
                               className="text-xs font-semibold text-[#B35A38] hover:underline"
                             >
                               Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleAvailability(driver)}
-                              className="text-xs font-semibold text-gray-600 hover:underline"
-                            >
-                              Toggle Availability
                             </button>
                             <button
                               type="button"

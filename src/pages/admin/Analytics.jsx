@@ -148,6 +148,24 @@ export default function Analytics() {
     loadAnalytics()
   }, [loadAnalytics])
 
+  useEffect(() => {
+    const channel = supabase.channel('analytics-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
+        loadAnalytics()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'booking_assignments' }, () => {
+        loadAnalytics()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'driver_performance' }, () => {
+        loadAnalytics()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [loadAnalytics])
+
   const dateRangeDays = useMemo(() => {
     if (!startDate || !endDate) return 0
     const start = new Date(startDate)
