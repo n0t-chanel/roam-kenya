@@ -53,7 +53,7 @@ export default function DriversManagement() {
           driver_performance (*),
           booking_assignments (
             id, assigned_at, completed_at,
-            bookings ( id, destination_location, destination, dropoff, dropoff_location, status )
+            bookings ( * )
           )
         `)
         .order('created_at', { ascending: false })

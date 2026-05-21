@@ -98,7 +98,12 @@ export default function DriverAssignmentModal({ booking, isOpen, onClose, onAssi
           destination: bookingDetails.destination,
           bookingId: bookingIdShort
         })
-        await sendEmail({ to: customerEmail, subject: customerTemplate.subject, html: customerTemplate.html })
+        try {
+          await sendEmail({ to: customerEmail, subject: customerTemplate.subject, html: customerTemplate.html })
+        } catch (e) {
+          console.warn('Failed to send customer notification email:', e)
+          emailFailed = true
+        }
       } else {
         emailFailed = true
       }
@@ -113,7 +118,12 @@ export default function DriverAssignmentModal({ booking, isOpen, onClose, onAssi
           destination: bookingDetails.destination,
           bookingId: bookingIdShort
         })
-        await sendEmail({ to: driverEmail, subject: driverTemplate.subject, html: driverTemplate.html })
+        try {
+          await sendEmail({ to: driverEmail, subject: driverTemplate.subject, html: driverTemplate.html })
+        } catch (e) {
+          console.warn('Failed to send driver notification email:', e)
+          emailFailed = true
+        }
       } else {
         console.warn('Driver email missing, skipping driver notification.')
         emailFailed = true
