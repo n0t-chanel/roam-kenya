@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, CreditCard, Navigation, Crosshair, Shield, Info } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, CreditCard, Navigation, Crosshair, Shield, Info, Truck } from "lucide-react";
 import BookingMap from "./BookingMap";
 import { useDatabase } from "../hooks/useDatabase";
 import { useAuthContext } from "../context/AuthContext";
@@ -452,6 +452,28 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
 
       const bid = savedBooking[0].id;
       setBookingId(bid);
+
+      // Auto-save user to user_profiles so admin can see their details
+      try {
+        const metadata = user.user_metadata || {};
+        let resolvedName = metadata.full_name || metadata.name;
+        if (!resolvedName) {
+          resolvedName = metadata.is_anonymous ? 'Guest User' : user.email;
+        }
+
+        await supabase.from("user_profiles").upsert(
+          {
+            id: user.id,
+            email: user.email,
+            full_name: resolvedName,
+            phone: phoneNumber,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: "id" }
+        );
+      } catch (profileErr) {
+        console.error("Failed to auto-save user profile:", profileErr);
+      }
 
       // If flight number provided (for airport transfers), start tracking
       if (formData.flightNumber?.trim() && serviceType === "airport-transfer") {

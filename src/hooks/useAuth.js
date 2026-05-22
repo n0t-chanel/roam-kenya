@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabaseAuth } from '../lib/supabase'
+import { supabase, supabaseAuth } from '../lib/supabase'
 
 /**
  * Custom hook for managing authentication state
@@ -10,12 +10,38 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  // Initialize auth state on mount
   useEffect(() => {
+    const syncProfile = async (sessionUser) => {
+      if (!sessionUser) return
+      try {
+        const metadata = sessionUser.user_metadata || {}
+        let resolvedName = metadata.full_name || metadata.name
+        
+        if (!resolvedName) {
+          if (metadata.is_anonymous) {
+            resolvedName = 'Guest User'
+          } else {
+            resolvedName = sessionUser.email
+          }
+        }
+
+        await supabase.from('user_profiles').upsert({
+          id: sessionUser.id,
+          email: sessionUser.email,
+          full_name: resolvedName,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' })
+      } catch (err) {
+        console.error('Profile sync error:', err)
+      }
+    }
+
     const initAuth = async () => {
       try {
         const { data: { session } } = await supabaseAuth.getSession()
-        setUser(session?.user ?? null)
+        const currentUser = session?.user ?? null
+        setUser(currentUser)
+        if (currentUser) syncProfile(currentUser)
       } catch (err) {
         setError(err.message)
       } finally {
@@ -28,7 +54,11 @@ export function useAuth() {
     // Subscribe to auth changes
     const { data: { subscription } } = supabaseAuth.onAuthStateChange(
       (event, session) => {
-        setUser(session?.user ?? null)
+        const currentUser = session?.user ?? null
+        setUser(currentUser)
+        if (event === 'SIGNED_IN' && currentUser) {
+          syncProfile(currentUser)
+        }
       }
     )
 

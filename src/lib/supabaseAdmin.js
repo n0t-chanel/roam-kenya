@@ -12,9 +12,11 @@ if (!supabaseUrl || !supabaseServiceKey) {
   console.warn('Supabase service role key not configured. Admin operations will not be available.')
 }
 
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey || '', {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-})
+export const supabaseAdmin = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
+  : null
