@@ -24,8 +24,26 @@ const normalizeAdminRole = (adminUser) => {
   return role
 }
 
+const withTimeout = (promise, ms = 10000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Request timed out')), ms))
+  ])
+}
+
 export async function fetchAdminProfile() {
-  const { data, error } = await supabase.functions.invoke('get-admin-role', { body: {} })
+  const { data: { session }, error: sessionError } = await supabaseAuth.getSession()
+  if (sessionError) throw sessionError
+  if (!session?.user) throw new Error('No active session. Please sign in.')
+
+  const authToken = session.access_token
+  const { data, error } = await withTimeout(
+    supabase.functions.invoke('get-admin-role', {
+      headers: {
+        Authorization: `Bearer ${authToken}`
+      }
+    })
+  )
   if (error) {
     throw new Error(error.message || 'Unable to verify admin access.')
   }
