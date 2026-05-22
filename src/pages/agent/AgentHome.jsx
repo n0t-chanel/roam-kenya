@@ -8,11 +8,13 @@ import { sendEmail } from '../../lib/resendClient'
 import { supabase } from '../../lib/supabase'
 import { useAdminAuth } from '../../context/AdminAuthContext'
 import {
+  fetchUserProfiles,
   formatDateTime,
   getBookingDateTimeValue,
   getFirstValue,
   getStatusBadgeClass,
   getStatusLabel,
+  mergeBookingsWithProfiles,
   normalizeStatus,
   useBookings
 } from '../../hooks/useBookings'
@@ -26,9 +28,8 @@ const FILTERS = [
 ]
 
 export default function AgentHome() {
-  const { user } = useAdminAuth()
+  const { user, adminId, error: authError } = useAdminAuth()
   const { updateBookingStatus, subscribeToBookings } = useBookings()
-  const [adminId, setAdminId] = useState(null)
   const [assignments, setAssignments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,21 +37,6 @@ export default function AgentHome() {
   const [selectedBooking, setSelectedBooking] = useState(null)
   const [assignmentBooking, setAssignmentBooking] = useState(null)
   const [actionMessage, setActionMessage] = useState(null)
-
-  const loadAdminId = useCallback(async () => {
-    if (!user?.id) return
-    const { data, error: adminError } = await supabase
-      .from('admin_users')
-      .select('id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
-    if (adminError) {
-      setError(adminError.message)
-      return
-    }
-    setAdminId(data?.id || null)
-  }, [user])
 
   const loadAssignments = useCallback(async () => {
     if (!adminId) return
@@ -75,17 +61,26 @@ export default function AgentHome() {
         .order('assigned_at', { ascending: false })
 
       if (queryError) throw queryError
-      setAssignments(data || [])
+      const assignments = data || []
+      const bookingRows = assignments.map((assignment) => assignment.bookings).filter(Boolean)
+      const userIds = [...new Set(bookingRows.map((booking) => booking.user_id).filter(Boolean))]
+      const profiles = await fetchUserProfiles(userIds)
+      const enrichedBookings = mergeBookingsWithProfiles(bookingRows, profiles)
+      const bookingMap = new Map(enrichedBookings.map((booking) => [booking.id, booking]))
+      const enrichedAssignments = assignments.map((assignment) => ({
+        ...assignment,
+        bookings: assignment.bookings
+          ? bookingMap.get(assignment.bookings.id) || assignment.bookings
+          : assignment.bookings
+      }))
+
+      setAssignments(enrichedAssignments)
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
   }, [adminId])
-
-  useEffect(() => {
-    loadAdminId()
-  }, [loadAdminId])
 
   useEffect(() => {
     if (!adminId) return
@@ -188,7 +183,7 @@ export default function AgentHome() {
           ))}
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {(error || authError) && <p className="text-sm text-red-600">{error || authError}</p>}
         {actionMessage && (
           <p
             className={`text-sm ${

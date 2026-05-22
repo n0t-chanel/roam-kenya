@@ -1,9 +1,9 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapPin, Phone, Clock, DollarSign, Activity, CheckCircle, Navigation } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { useAdminAuth } from '../../context/AdminAuthContext'
 import { supabase } from '../../lib/supabase'
-import { formatCurrency, formatDateTime } from '../../hooks/useBookings'
+import { fetchUserProfiles, formatCurrency, formatDateTime, getFirstValue, mergeBookingsWithProfiles } from '../../hooks/useBookings'
 
 const STATUS_COLORS = {
   available: 'bg-green-100 text-green-700 border-green-200',
@@ -20,7 +20,7 @@ export default function DriverTrips() {
   const [error, setError] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     if (!user?.email) return
     try {
       setLoading(true)
@@ -59,7 +59,7 @@ export default function DriverTrips() {
         .maybeSingle()
         
       if (activeError && activeError.code !== 'PGRST116') throw activeError
-      setActiveAssignment(activeData && activeData.bookings ? activeData : null)
+      const activeAssignmentRaw = activeData && activeData.bookings ? activeData : null
 
       // 3. Get Trip History
       const { data: historyData, error: historyError } = await supabase
@@ -73,18 +73,75 @@ export default function DriverTrips() {
         .order('completed_at', { ascending: false })
 
       if (historyError) throw historyError
-      setHistory(historyData || [])
+      const historyRows = historyData || []
+
+      const bookingsToEnrich = []
+      if (activeAssignmentRaw?.bookings) bookingsToEnrich.push(activeAssignmentRaw.bookings)
+      historyRows.forEach((entry) => {
+        if (entry.bookings) bookingsToEnrich.push(entry.bookings)
+      })
+
+      const userIds = [...new Set(bookingsToEnrich.map((booking) => booking.user_id).filter(Boolean))]
+      const profiles = await fetchUserProfiles(userIds)
+      const enrichedBookings = mergeBookingsWithProfiles(bookingsToEnrich, profiles)
+      const bookingMap = new Map(enrichedBookings.map((booking) => [booking.id, booking]))
+      const enrichBooking = (booking) => bookingMap.get(booking.id) || booking
+
+      const enrichedActive = activeAssignmentRaw
+        ? { ...activeAssignmentRaw, bookings: enrichBooking(activeAssignmentRaw.bookings) }
+        : null
+      const enrichedHistory = historyRows.map((entry) => ({
+        ...entry,
+        bookings: entry.bookings ? enrichBooking(entry.bookings) : entry.bookings
+      }))
+
+      setActiveAssignment(enrichedActive)
+      setHistory(enrichedHistory)
 
     } catch (err) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.email])
 
   useEffect(() => {
     loadDashboard()
-  }, [user])
+  }, [loadDashboard])
+
+  useEffect(() => {
+    if (!driver?.id) return
+    const bookingIds = new Set(
+      [activeAssignment?.bookings?.id, ...history.map((item) => item.bookings?.id)].filter(Boolean)
+    )
+    const channel = supabase
+      .channel(`driver-dashboard-${driver.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'booking_assignments', filter: `driver_id=eq.${driver.id}` },
+        () => loadDashboard()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'drivers', filter: `id=eq.${driver.id}` },
+        () => loadDashboard()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        (payload) => {
+          const bookingId = payload.new?.id || payload.old?.id
+          if (bookingIds.has(bookingId)) {
+            loadDashboard()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [driver?.id, activeAssignment, history, loadDashboard])
 
   const handleUpdateStatus = async (newStatus) => {
     if (!activeAssignment?.bookings?.id) return
@@ -101,20 +158,23 @@ export default function DriverTrips() {
         const perf = driver.driver_performance?.[0] || {}
         const fare = Number(activeAssignment.bookings.total_fare ?? activeAssignment.bookings.total_price ?? 0)
         
-        await supabase.from('booking_assignments')
+        const { error: assignError } = await supabase.from('booking_assignments')
           .update({ completed_at: new Date().toISOString() })
           .eq('id', activeAssignment.id)
+        if (assignError) throw assignError
           
-        await supabase.from('drivers')
+        const { error: driverError } = await supabase.from('drivers')
           .update({ status: 'available' })
           .eq('id', driver.id)
+        if (driverError) throw driverError
           
-        await supabase.from('driver_performance')
+        const { error: perfError } = await supabase.from('driver_performance')
           .update({
             trips_completed: (perf.trips_completed || 0) + 1,
             earnings_total: Number(perf.earnings_total || 0) + (Number.isNaN(fare) ? 0 : fare)
           })
           .eq('driver_id', driver.id)
+        if (perfError) throw perfError
       }
       
       await loadDashboard()
@@ -142,6 +202,17 @@ export default function DriverTrips() {
   }
 
   const performance = driver?.driver_performance?.[0] || {}
+
+  const activeBooking = activeAssignment?.bookings
+  const activeCustomerName = activeBooking
+    ? getFirstValue(activeBooking, ['customer_name', 'customerName', 'full_name', 'name'], 'Unknown')
+    : 'Unknown'
+  const activeCustomerPhone = activeBooking
+    ? getFirstValue(activeBooking, ['customer_phone', 'customerPhone', 'phone'], '')
+    : ''
+  const activeCustomerEmail = activeBooking
+    ? getFirstValue(activeBooking, ['customer_email', 'customerEmail', 'email'], '')
+    : ''
   
   const todayEarnings = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -251,12 +322,15 @@ export default function DriverTrips() {
                   <div className="bg-gray-50 rounded-lg p-4 space-y-4">
                     <div>
                       <p className="text-xs text-gray-500 font-medium mb-1">CUSTOMER</p>
-                      <p className="text-gray-900 font-semibold">{activeAssignment.bookings.customer_name || 'Unknown'}</p>
-                      {activeAssignment.bookings.customer_phone && (
-                        <a href={`tel:${activeAssignment.bookings.customer_phone}`} className="flex items-center gap-2 text-sm text-[#B35A38] mt-1 hover:underline">
+                      <p className="text-gray-900 font-semibold">{activeCustomerName}</p>
+                      {activeCustomerPhone && (
+                        <a href={`tel:${activeCustomerPhone}`} className="flex items-center gap-2 text-sm text-[#B35A38] mt-1 hover:underline">
                           <Phone className="h-3 w-3" />
-                          {activeAssignment.bookings.customer_phone}
+                          {activeCustomerPhone}
                         </a>
+                      )}
+                      {activeCustomerEmail && (
+                        <p className="text-xs text-gray-500 mt-1">{activeCustomerEmail}</p>
                       )}
                     </div>
                     <div>
@@ -331,7 +405,9 @@ export default function DriverTrips() {
                               <div className="max-w-[200px] truncate text-gray-900">{booking.pickup_location}</div>
                               <div className="max-w-[200px] truncate text-gray-500 text-xs">→ {booking.destination_location}</div>
                             </td>
-                            <td className="px-5 py-3">{booking.customer_name || '—'}</td>
+                            <td className="px-5 py-3">
+                              {getFirstValue(booking, ['customer_name', 'customerName', 'full_name', 'name'], '—')}
+                            </td>
                             <td className="px-5 py-3 text-right font-medium text-gray-900">
                               {formatCurrency(booking.total_fare ?? booking.total_price)}
                             </td>

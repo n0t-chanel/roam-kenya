@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, supabaseAuth } from '../lib/supabase'
-import { signOutAdmin } from '../lib/adminAuth'
+import { supabaseAuth } from '../lib/supabase'
+import { getAdminProfile, signOutAdmin } from '../lib/adminAuth'
 
 const AdminAuthContext = createContext(undefined)
 
@@ -11,37 +11,9 @@ const AdminAuthContext = createContext(undefined)
 export function AdminAuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [role, setRole] = useState(null)
+  const [adminId, setAdminId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-
-  const withTimeout = (promise, ms, errorMessage) => {
-    let timeoutId
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(errorMessage))
-      }, ms)
-    })
-    return Promise.race([promise, timeoutPromise]).finally(() => {
-      clearTimeout(timeoutId)
-    })
-  }
-
-  const fetchRole = async (userId) => {
-    const queryPromise = supabase
-      .from('admin_users')
-      .select('role')
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    const { data, error: roleError } = await withTimeout(
-      queryPromise,
-      15000,
-      'Database query timed out after 15 seconds. Please check your internet connection. If your connection is strong, you may still have a recursive Row Level Security (RLS) policy.'
-    )
-
-    if (roleError) throw roleError
-    return data?.role ?? null
-  }
 
   useEffect(() => {
     let isMounted = true
@@ -56,17 +28,23 @@ export function AdminAuthProvider({ children }) {
         if (!session?.user) {
           setUser(null)
           setRole(null)
+          setAdminId(null)
           return
         }
         setUser(session.user)
-        const resolvedRole = await fetchRole(session.user.id)
+        const { adminUser, role: resolvedRole } = await getAdminProfile()
         if (!isMounted) return
         setRole(resolvedRole)
+        setAdminId(adminUser?.id ?? null)
       } catch (err) {
         if (!isMounted) return
-        setError(err.message)
+        // Don't surface DB/timeout/RLS errors to the UI as fatal authentication errors.
+        // Fallback to showing the login screen and let the sign-in flow handle clearer errors.
+        console.warn('Admin profile check failed:', err)
+        setError(null)
         setUser(null)
         setRole(null)
+        setAdminId(null)
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -81,17 +59,21 @@ export function AdminAuthProvider({ children }) {
         if (!session?.user) {
           setUser(null)
           setRole(null)
+          setAdminId(null)
           return
         }
         setUser(session.user)
-        const resolvedRole = await fetchRole(session.user.id)
+        const { adminUser, role: resolvedRole } = await getAdminProfile()
         if (!isMounted) return
         setRole(resolvedRole)
+        setAdminId(adminUser?.id ?? null)
       } catch (err) {
         if (!isMounted) return
-        setError(err.message)
+        console.warn('Admin profile refresh failed:', err)
+        setError(null)
         setUser(null)
         setRole(null)
+        setAdminId(null)
       }
     })
 
@@ -107,6 +89,7 @@ export function AdminAuthProvider({ children }) {
       await signOutAdmin()
       setUser(null)
       setRole(null)
+      setAdminId(null)
     } catch (err) {
       setError(err.message)
       throw err
@@ -114,7 +97,7 @@ export function AdminAuthProvider({ children }) {
   }
 
   return (
-    <AdminAuthContext.Provider value={{ user, role, loading, error, signOut }}>
+    <AdminAuthContext.Provider value={{ user, role, adminId, loading, error, signOut }}>
       {children}
     </AdminAuthContext.Provider>
   )

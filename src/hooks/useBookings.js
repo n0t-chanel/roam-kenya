@@ -46,6 +46,42 @@ export const getFirstValue = (obj, paths, fallback = '') => {
   return fallback
 }
 
+const extractFallbackPhone = (booking) => {
+  if (!booking?.notes) return '—'
+  if (!booking.notes.includes('Phone:')) return '—'
+  const match = booking.notes.match(/Phone:\s*([^\.]+)/)
+  return match?.[1]?.trim() || '—'
+}
+
+export const fetchUserProfiles = async (userIds = []) => {
+  if (!userIds?.length) return []
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('id, full_name, email, phone')
+    .in('id', userIds)
+  if (error) throw error
+  return data || []
+}
+
+export const mergeBookingsWithProfiles = (bookings = [], profiles = []) => {
+  if (!Array.isArray(bookings) || bookings.length === 0) return []
+  const profileMap = profiles.reduce((acc, profile) => {
+    acc[profile.id] = profile
+    return acc
+  }, {})
+
+  return bookings.map((booking) => {
+    const profile = profileMap[booking.user_id] || {}
+    const fallbackPhone = extractFallbackPhone(booking)
+    return {
+      ...booking,
+      customer_name: profile.full_name || booking.customer_name || booking.full_name || 'Unknown',
+      customer_email: profile.email || booking.customer_email || booking.email || '—',
+      customer_phone: profile.phone || booking.customer_phone || booking.phone || fallbackPhone
+    }
+  })
+}
+
 export const normalizeStatus = (status) => {
   const key = typeof status === 'string' ? status.toLowerCase() : ''
   return STATUS_NORMALIZATION[key] || key || 'new'
@@ -126,14 +162,7 @@ export function useBookings() {
 
       // 1. Fetch user profiles for the bookings
       const userIds = [...new Set(data.map((b) => b.user_id).filter(Boolean))]
-      let profiles = []
-      if (userIds.length > 0) {
-        const { data: pData } = await supabase
-          .from('user_profiles')
-          .select('id, full_name, email, phone')
-          .in('id', userIds)
-        if (pData) profiles = pData
-      }
+       const profiles = await fetchUserProfiles(userIds)
 
       // 2. Fetch driver and agent assignments
       const bookingIds = data.map((b) => b.id)
@@ -146,28 +175,16 @@ export function useBookings() {
         if (aData) assignments = aData
       }
 
-      const profileMap = profiles.reduce((acc, p) => ({ ...acc, [p.id]: p }), {})
-      const assignMap = assignments.reduce((acc, a) => ({ ...acc, [a.booking_id]: a }), {})
+       const assignMap = assignments.reduce((acc, a) => ({ ...acc, [a.booking_id]: a }), {})
 
-      const enrichedData = data.map((b) => {
-        const profile = profileMap[b.user_id] || {}
-        const assignment = assignMap[b.id] || {}
-        
-        let fallbackPhone = '—'
-        if (b.notes && b.notes.includes('Phone:')) {
-          const match = b.notes.match(/Phone:\s*([^\.]+)/)
-          if (match && match[1]) fallbackPhone = match[1].trim()
-        }
-
-        return {
-          ...b,
-          customer_name: profile.full_name || b.customer_name || b.full_name || 'Unknown',
-          customer_email: profile.email || b.customer_email || b.email || '—',
-          customer_phone: profile.phone || b.customer_phone || b.phone || fallbackPhone,
-          driver_name: assignment.drivers?.name || 'Unassigned',
-          agent_name: assignment.admin_users?.name || 'Unassigned'
-        }
-      })
+       const enrichedData = mergeBookingsWithProfiles(data, profiles).map((booking) => {
+         const assignment = assignMap[booking.id] || {}
+         return {
+           ...booking,
+           driver_name: assignment.drivers?.name || 'Unassigned',
+           agent_name: assignment.admin_users?.name || 'Unassigned'
+         }
+       })
 
       return enrichedData
     } catch (err) {

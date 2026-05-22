@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { supabase } from '../../lib/supabase'
+import { fetchUserProfiles, mergeBookingsWithProfiles } from '../../hooks/useBookings'
 
 const ROLE_OPTIONS = [
   { label: 'Booking Agent', value: 'booking_agent' },
@@ -169,14 +170,27 @@ export default function AgentsManagement() {
     setModalState({ type: 'details', agent })
     setDetailsLoading(true)
     try {
-      const { data, error: detailsError } = await supabase
-        .from('booking_assignments')
-        .select('id, assigned_at, completed_at, bookings (*)')
-        .eq('agent_id', agent.id)
-        .order('assigned_at', { ascending: false })
-        .limit(10)
-      if (detailsError) throw detailsError
-      setDetailsAssignments(data || [])
+       const { data, error: detailsError } = await supabase
+         .from('booking_assignments')
+         .select('id, assigned_at, completed_at, bookings (*)')
+         .eq('agent_id', agent.id)
+         .order('assigned_at', { ascending: false })
+         .limit(10)
+       if (detailsError) throw detailsError
+       const assignments = data || []
+       const bookingRows = assignments.map((assignment) => assignment.bookings).filter(Boolean)
+       const userIds = [...new Set(bookingRows.map((booking) => booking.user_id).filter(Boolean))]
+       const profiles = await fetchUserProfiles(userIds)
+       const enrichedBookings = mergeBookingsWithProfiles(bookingRows, profiles)
+       const bookingMap = new Map(enrichedBookings.map((booking) => [booking.id, booking]))
+       const enrichedAssignments = assignments.map((assignment) => ({
+         ...assignment,
+         bookings: assignment.bookings
+           ? bookingMap.get(assignment.bookings.id) || assignment.bookings
+           : assignment.bookings
+       }))
+
+       setDetailsAssignments(enrichedAssignments)
     } catch (err) {
       setError(err.message)
     } finally {

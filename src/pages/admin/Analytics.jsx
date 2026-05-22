@@ -17,6 +17,7 @@ import {
 import AdminLayout from '../../components/admin/AdminLayout'
 import { supabase } from '../../lib/supabase'
 import { exportToCSV } from '../../lib/exportUtils'
+import { formatCurrency } from '../../hooks/useBookings'
 
 const QUICK_RANGES = [
   { label: 'Today', value: 'today' },
@@ -177,16 +178,25 @@ export default function Analytics() {
 
   const revenueSeries = useMemo(() => {
     const buckets = new Map()
-    bookings
-      .filter((booking) => booking.status === 'completed')
-      .forEach((booking) => {
-        const key = formatDateKey(booking.created_at, monthlyAggregation)
-        if (!key) return
-        const existing = buckets.get(key) || { reservation: 0, final: 0 }
-        existing.reservation += Number(booking.reservation_fee || 0)
-        existing.final += Number(booking.final_payment_due || 0)
-        buckets.set(key, existing)
-      })
+    bookings.forEach((booking) => {
+      const key = formatDateKey(booking.created_at, monthlyAggregation)
+      if (!key) return
+
+      const paymentStatus = String(booking.payment_status || '').toLowerCase()
+      const reservationPaid = paymentStatus === 'reservation_paid' || paymentStatus === 'paid'
+      const finalPaid = paymentStatus === 'paid'
+
+      const reservationFee = Number(booking.price_amount ?? 0)
+      const totalPrice = Number(booking.total_price ?? booking.total_fare ?? 0)
+      const safeReservation = Number.isNaN(reservationFee) ? 0 : reservationFee
+      const safeTotal = Number.isNaN(totalPrice) ? 0 : totalPrice
+      const finalPayment = Math.max(safeTotal - safeReservation, 0)
+
+      const existing = buckets.get(key) || { reservation: 0, final: 0 }
+      if (reservationPaid) existing.reservation += safeReservation
+      if (finalPaid) existing.final += finalPayment
+      buckets.set(key, existing)
+    })
 
     return Array.from(buckets.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -378,7 +388,7 @@ export default function Analytics() {
             <div className="bg-white border border-gray-200 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Revenue</h3>
-                <span className="text-2xl font-semibold text-gray-900">KES {totalRevenue.toLocaleString()}</span>
+                <span className="text-2xl font-semibold text-gray-900">{formatCurrency(totalRevenue)}</span>
               </div>
               <div className="mt-4">
                 <ResponsiveContainer width="100%" height={300}>
@@ -386,7 +396,7 @@ export default function Analytics() {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip />
+                    <Tooltip formatter={(value) => formatCurrency(value)} />
                     <Legend />
                     <Line type="monotone" dataKey="reservation" stroke="#B35A38" name="Reservation Fees" />
                     <Line type="monotone" dataKey="final" stroke="#2563EB" name="Final Payments" />
@@ -488,7 +498,7 @@ export default function Analytics() {
                           <td className="px-4 py-3 text-gray-600">{Number(row.average_rating ?? 0).toFixed(1)}</td>
                           <td className="px-4 py-3 text-gray-600">{Math.round((row.on_time_rate ?? 0) * 100)}%</td>
                           <td className="px-4 py-3 text-gray-600">{Math.round((row.cancellation_rate ?? 0) * 100)}%</td>
-                          <td className="px-4 py-3 text-gray-600">KES {Number(row.earnings_total ?? 0).toLocaleString()}</td>
+                          <td className="px-4 py-3 text-gray-600">{formatCurrency(row.earnings_total ?? 0)}</td>
                         </tr>
                       ))
                     )}

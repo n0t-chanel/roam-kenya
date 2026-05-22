@@ -1,17 +1,44 @@
 import { supabase, supabaseAuth } from './supabase'
 
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid credentials. Access denied.'
+const ALLOWED_ROLES = ['super_admin', 'booking_agent', 'driver']
 
-const withTimeout = (promise, ms, errorMessage) => {
-  let timeoutId
-  const timeoutPromise = new Promise((_, reject) => {
-    timeoutId = setTimeout(() => {
-      reject(new Error(errorMessage))
-    }, ms)
-  })
-  return Promise.race([promise, timeoutPromise]).finally(() => {
-    clearTimeout(timeoutId)
-  })
+const normalizeAdminRole = (adminUser) => {
+  if (!adminUser) {
+    throw new Error(
+      "Access denied. No administrator record found for this account in the 'admin_users' table."
+    )
+  }
+
+  const role = adminUser.role?.toLowerCase()
+  if (!role || !ALLOWED_ROLES.includes(role)) {
+    throw new Error(
+      `Access denied. The role "${adminUser.role}" specified in the 'admin_users' table is invalid. Allowed roles are: ${ALLOWED_ROLES.join(', ')}.`
+    )
+  }
+
+  if (adminUser.is_active === false) {
+    throw new Error('Your account has been deactivated. Contact your administrator.')
+  }
+
+  return role
+}
+
+export async function fetchAdminProfile() {
+  const { data, error } = await supabase.functions.invoke('get-admin-role', { body: {} })
+  if (error) {
+    throw new Error(error.message || 'Unable to verify admin access.')
+  }
+  if (!data?.success) {
+    throw new Error(data?.error || 'Access denied. No administrator profile found.')
+  }
+  return data?.adminUser
+}
+
+export async function getAdminProfile() {
+  const adminUser = await fetchAdminProfile()
+  const role = normalizeAdminRole(adminUser)
+  return { adminUser, role }
 }
 
 export async function signInAdmin(email, password) {
@@ -28,49 +55,13 @@ export async function signInAdmin(email, password) {
     throw new Error(INVALID_CREDENTIALS_MESSAGE)
   }
 
-  const queryPromise = supabase
-    .from('admin_users')
-    .select('role, is_active')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  let queryResult
   try {
-    queryResult = await withTimeout(
-      queryPromise,
-      5000,
-      'Database verification query timed out. This is typically caused by a recursive Row Level Security (RLS) policy in the admin_users table in your Supabase database. Please ensure your RLS policy is non-recursive.'
-    )
+    const { adminUser, role } = await getAdminProfile()
+    return { user, role, adminId: adminUser?.id ?? null }
   } catch (err) {
     await supabaseAuth.signOut()
     throw new Error(err.message)
   }
-
-  const { data: adminUser, error: adminError } = queryResult
-
-  if (adminError) {
-    await supabaseAuth.signOut()
-    throw new Error(`Database error during admin verification: ${adminError.message}`)
-  }
-
-  if (!adminUser) {
-    await supabaseAuth.signOut()
-    throw new Error(`Access denied. No administrator record found for this account in the 'admin_users' table. Please ensure you inserted a row with the correct 'user_id' matching the Auth UUID (do not confuse the 'id' and 'user_id' columns).`)
-  }
-
-  const role = adminUser.role?.toLowerCase()
-  const allowedRoles = ['super_admin', 'booking_agent', 'driver']
-  if (!role || !allowedRoles.includes(role)) {
-    await supabaseAuth.signOut()
-    throw new Error(`Access denied. The role "${adminUser.role}" specified in the 'admin_users' table is invalid. Allowed roles are: ${allowedRoles.join(', ')}.`)
-  }
-
-  if (adminUser.is_active === false) {
-    await supabaseAuth.signOut()
-    throw new Error('Your account has been deactivated. Contact your administrator.')
-  }
-
-  return { user, role }
 }
 
 export async function signOutAdmin() {
@@ -83,12 +74,6 @@ export async function getCurrentAdminRole() {
   if (error) throw error
   if (!session?.user) return null
 
-  const { data, error: roleError } = await supabase
-    .from('admin_users')
-    .select('role')
-    .eq('user_id', session.user.id)
-    .maybeSingle()
-
-  if (roleError) throw roleError
-  return data?.role ?? null
+  const { role } = await getAdminProfile()
+  return role ?? null
 }

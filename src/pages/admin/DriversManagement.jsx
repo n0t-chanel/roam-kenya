@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { supabase } from '../../lib/supabase'
+import { fetchUserProfiles, formatCurrency, mergeBookingsWithProfiles } from '../../hooks/useBookings'
 
 const STATUS_TABS = [
   { label: 'All', value: 'all' },
@@ -46,20 +47,39 @@ export default function DriversManagement() {
     try {
       setError(null)
       setLoading(true)
-      const { data, error: queryError } = await supabase
-        .from('drivers')
-        .select(`
-          *,
-          driver_performance (*),
-          booking_assignments (
-            id, assigned_at, completed_at,
-            bookings ( * )
-          )
-        `)
-        .order('created_at', { ascending: false })
+       const { data, error: queryError } = await supabase
+         .from('drivers')
+         .select(`
+           *,
+           driver_performance (*),
+           booking_assignments (
+             id, assigned_at, completed_at,
+             bookings ( * )
+           )
+         `)
+         .order('created_at', { ascending: false })
 
-      if (queryError) throw queryError
-      setDrivers(data || [])
+       if (queryError) throw queryError
+       const driverRows = data || []
+       const bookingRows = driverRows.flatMap((driver) =>
+         (driver.booking_assignments || []).map((assignment) => assignment.bookings).filter(Boolean)
+       )
+       const userIds = [...new Set(bookingRows.map((booking) => booking.user_id).filter(Boolean))]
+       const profiles = await fetchUserProfiles(userIds)
+       const enrichedBookings = mergeBookingsWithProfiles(bookingRows, profiles)
+       const bookingMap = new Map(enrichedBookings.map((booking) => [booking.id, booking]))
+
+       const enrichedDrivers = driverRows.map((driver) => ({
+         ...driver,
+         booking_assignments: (driver.booking_assignments || []).map((assignment) => ({
+           ...assignment,
+           bookings: assignment.bookings
+             ? bookingMap.get(assignment.bookings.id) || assignment.bookings
+             : assignment.bookings
+         }))
+       }))
+
+       setDrivers(enrichedDrivers)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -376,7 +396,7 @@ export default function DriversManagement() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-gray-600">{performance.trips_completed ?? 0}</td>
-                        <td className="px-4 py-3 text-gray-600">KES {Number(performance.earnings_total ?? 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatCurrency(performance.earnings_total ?? 0)}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -510,7 +530,7 @@ export default function DriversManagement() {
             </div>
             <div className="px-6 py-4 text-sm text-gray-600 flex items-center justify-between">
               <span>Total Trips: {historyTotals.count}</span>
-              <span>Total Earnings: KES {historyTotals.earnings.toLocaleString()}</span>
+              <span>Total Earnings: {formatCurrency(historyTotals.earnings)}</span>
             </div>
             <div className="px-6 pb-6">
               <div className="overflow-x-auto border border-gray-200 rounded-lg">
@@ -554,7 +574,7 @@ export default function DriversManagement() {
                               {booking.pickup_datetime || booking.booking_date || '—'}
                             </td>
                             <td className="px-4 py-3 text-gray-600">
-                              KES {Number(booking.total_fare ?? booking.total_price ?? 0).toLocaleString()}
+                              {formatCurrency(booking.total_fare ?? booking.total_price ?? 0)}
                             </td>
                             <td className="px-4 py-3 text-gray-600">{booking.status || '—'}</td>
                           </tr>

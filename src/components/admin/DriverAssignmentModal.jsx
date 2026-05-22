@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { X } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 import { driverAssignedCustomerEmail, driverAssignedDriverEmail } from '../../lib/emailTemplates'
 import { sendEmail } from '../../lib/resendClient'
 import { useAdminAuth } from '../../context/AdminAuthContext'
@@ -9,11 +8,10 @@ import { useDriverAssignment } from '../../hooks/useDriverAssignment'
 import { formatDateTime, getBookingDateTimeValue, getFirstValue } from '../../hooks/useBookings'
 
 export default function DriverAssignmentModal({ booking, isOpen, onClose, onAssigned }) {
-  const { user } = useAdminAuth()
+  const { adminId } = useAdminAuth()
   const { fetchAvailableDrivers, assignDriver, loading } = useDriverAssignment()
   const [drivers, setDrivers] = useState([])
   const [selectedDriverId, setSelectedDriverId] = useState(null)
-  const [adminId, setAdminId] = useState(null)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
   const [emailWarning, setEmailWarning] = useState(null)
@@ -39,21 +37,6 @@ export default function DriverAssignmentModal({ booking, isOpen, onClose, onAssi
     setEmailWarning(null)
     setSelectedDriverId(null)
 
-    const loadAdmin = async () => {
-      if (!user?.id) return
-      const { data, error: adminError } = await supabase
-        .from('admin_users')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle()
-
-      if (adminError) {
-        setError(adminError.message)
-        return
-      }
-      setAdminId(data?.id || null)
-    }
-
     const loadDrivers = async () => {
       try {
         const data = await fetchAvailableDrivers()
@@ -63,14 +46,21 @@ export default function DriverAssignmentModal({ booking, isOpen, onClose, onAssi
       }
     }
 
-    loadAdmin()
     loadDrivers()
-  }, [isOpen, user, fetchAvailableDrivers])
+  }, [isOpen, fetchAvailableDrivers])
 
   const selectedDriver = drivers.find((driver) => driver.id === selectedDriverId)
 
   const handleConfirm = async () => {
-    if (!bookingDetails || !selectedDriver || !adminId) return
+    if (!bookingDetails) return
+    if (!adminId) {
+      setError('Your admin profile is missing. Ask a super admin to add you to admin_users.')
+      return
+    }
+    if (!selectedDriver) {
+      setError('Select a driver before confirming the assignment.')
+      return
+    }
     setError(null)
     setNotice(null)
     setEmailWarning(null)
