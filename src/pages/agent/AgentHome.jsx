@@ -304,6 +304,7 @@ export default function AgentHome() {
                 : assignment
             )
           )
+          setSelectedBooking((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev))
         }}
         canAssignDriver={false}
       />

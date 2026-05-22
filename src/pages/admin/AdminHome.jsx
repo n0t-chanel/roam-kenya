@@ -194,6 +194,7 @@ export default function AdminHome() {
         onStatusChange={(updated) => {
           if (!updated) return
           setBookings((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)))
+          setSelectedBooking((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev))
         }}
         canAssignDriver
       />

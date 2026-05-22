@@ -35,8 +35,8 @@ export function AdminAuthProvider({ children }) {
 
     const { data, error: roleError } = await withTimeout(
       queryPromise,
-      5000,
-      'Database query timed out. This is typically caused by a recursive Row Level Security (RLS) policy in the admin_users table in Supabase. Please ensure your RLS policy is non-recursive.'
+      15000,
+      'Database query timed out after 15 seconds. Please check your internet connection. If your connection is strong, you may still have a recursive Row Level Security (RLS) policy.'
     )
 
     if (roleError) throw roleError

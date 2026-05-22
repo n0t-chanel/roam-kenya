@@ -283,19 +283,18 @@ export default function LoginModal({ isOpen, onClose }) {
 
               {/* Anonymous */}
               <button
-                onClick={handleAnonymousLogin}
-                disabled={isLoading}
-                className="w-full group relative overflow-hidden rounded-2xl p-3.5 transition-all duration-300 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 hover:from-purple-500/30 hover:to-indigo-500/30 border border-purple-500/30 text-white disabled:opacity-50"
+                disabled={true}
+                className="w-full group relative overflow-hidden rounded-2xl p-3.5 transition-all duration-300 bg-gray-500/10 border border-gray-500/30 text-white/50 cursor-not-allowed"
+                title="Guest booking is temporarily disabled. Please register to book."
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Ghost size={20} />
                     <div className="text-left">
-                      <p className="font-bold text-sm">Continue as Guest</p>
-                      <p className="text-[11px] opacity-60">No account needed</p>
+                      <p className="font-bold text-sm">Continue as Guest (Coming up)</p>
+                      <p className="text-[11px] opacity-60">Registration required for now</p>
                     </div>
                   </div>
-                  <span className="text-lg opacity-0 group-hover:opacity-100 transition-all">→</span>
                 </div>
               </button>
             </>

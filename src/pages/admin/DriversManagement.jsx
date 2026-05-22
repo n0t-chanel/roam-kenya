@@ -353,10 +353,23 @@ export default function DriversManagement() {
                           {activeBooking ? (
                             <div className="text-xs">
                               <span className="font-semibold text-[#B35A38]">#{activeBooking.id.slice(0,6).toUpperCase()}</span>
-                              <br />
-                              <span className="text-gray-500 truncate max-w-[120px] inline-block" title={activeBooking.destination || activeBooking.destination_location}>
-                                To: {activeBooking.destination || activeBooking.destination_location || '—'}
-                              </span>
+                              <div className="text-gray-600 mt-0.5">
+                                <span className="text-gray-500 truncate max-w-[120px] inline-block" title={activeBooking.destination || activeBooking.destination_location}>
+                                  To: {activeBooking.destination || activeBooking.destination_location || '—'}
+                                </span>
+                              </div>
+                              <div className="mt-2 pt-1 border-t border-gray-100">
+                                <p className="text-xs font-semibold text-gray-900">{activeBooking.customer_name || 'Unknown Customer'}</p>
+                                {activeBooking.customer_phone && (
+                                  <a href={`tel:${activeBooking.customer_phone}`} className="text-xs text-[#B35A38] hover:underline flex items-center gap-1 mt-0.5">
+                                    📞 {activeBooking.customer_phone}
+                                  </a>
+                                )}
+                              </div>
+                              <div className="mt-1.5 text-xs text-[#B35A38] font-medium flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-[#B35A38] animate-pulse"></span>
+                                {activeBooking.status?.replace('_', ' ').toUpperCase()}
+                              </div>
                             </div>
                           ) : (
                             <span className="text-gray-400 text-xs">—</span>

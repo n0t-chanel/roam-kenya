@@ -161,9 +161,9 @@ export function useBookings() {
 
         return {
           ...b,
-          customer_name: profile.full_name || 'Unknown',
-          customer_email: profile.email || '—',
-          customer_phone: profile.phone || fallbackPhone,
+          customer_name: profile.full_name || b.customer_name || b.full_name || 'Unknown',
+          customer_email: profile.email || b.customer_email || b.email || '—',
+          customer_phone: profile.phone || b.customer_phone || b.phone || fallbackPhone,
           driver_name: assignment.drivers?.name || 'Unassigned',
           agent_name: assignment.admin_users?.name || 'Unassigned'
         }
@@ -182,6 +182,15 @@ export function useBookings() {
     try {
       setError(null)
       setLoading(true)
+      // Fetch current booking state to prevent double-counting and get fare
+      const { data: currentBooking, error: fetchErr } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('id', bookingId)
+        .single()
+      
+      if (fetchErr) throw fetchErr
+
       const { data, error: updateError } = await supabase
         .from('bookings')
         .update({ status: newStatus, updated_at: new Date().toISOString() })
@@ -190,6 +199,46 @@ export function useBookings() {
         .maybeSingle()
 
       if (updateError) throw updateError
+
+      // If marking as completed and it wasn't already completed
+      if (newStatus === 'completed' && currentBooking.status !== 'completed') {
+        const { data: assignment } = await supabase
+          .from('booking_assignments')
+          .select('*')
+          .eq('booking_id', bookingId)
+          .is('completed_at', null)
+          .maybeSingle()
+        
+        if (assignment && assignment.driver_id) {
+          // 1. Mark assignment as completed
+          await supabase.from('booking_assignments')
+            .update({ completed_at: new Date().toISOString() })
+            .eq('id', assignment.id)
+          
+          // 2. Set driver back to available
+          await supabase.from('drivers')
+            .update({ status: 'available' })
+            .eq('id', assignment.driver_id)
+
+          // 3. Update driver performance metrics
+          const { data: perf } = await supabase
+            .from('driver_performance')
+            .select('*')
+            .eq('driver_id', assignment.driver_id)
+            .maybeSingle()
+            
+          if (perf) {
+            const fare = Number(currentBooking.total_fare ?? currentBooking.total_price ?? 0)
+            await supabase.from('driver_performance')
+              .update({
+                trips_completed: (perf.trips_completed || 0) + 1,
+                earnings_total: Number(perf.earnings_total || 0) + (Number.isNaN(fare) ? 0 : fare)
+              })
+              .eq('driver_id', assignment.driver_id)
+          }
+        }
+      }
+
       return data
     } catch (err) {
       setError(err.message)
