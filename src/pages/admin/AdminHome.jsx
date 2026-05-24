@@ -6,15 +6,15 @@ import { formatCurrency, formatDateTime, getBookingDateTimeValue, getFirstValue,
 
 const KANBAN_COLUMNS = [
   { key: 'new', label: 'New' },
-  { key: 'assigned', label: 'Driver Assigned' },
-  { key: 'en_route', label: 'En Route' },
+  { key: 'assigned', label: 'Driver Assigned / En Route' },
+  { key: 'cancelled', label: 'Cancelled' },
   { key: 'completed', label: 'Completed' }
 ]
 
 const normalizeForKanban = (status) => {
   const normalized = normalizeStatus(status)
-  if (normalized === 'assigned') return 'assigned'
-  if (normalized === 'en_route') return 'en_route'
+  if (normalized === 'assigned' || normalized === 'en_route') return 'assigned'
+  if (normalized === 'cancelled') return 'cancelled'
   if (normalized === 'completed') return 'completed'
   return 'new'
 }

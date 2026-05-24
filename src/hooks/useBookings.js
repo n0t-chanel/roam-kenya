@@ -237,22 +237,25 @@ export function useBookings() {
             .update({ status: 'available' })
             .eq('id', assignment.driver_id)
 
-          // 3. Update driver performance metrics
+          // 3. Update driver performance metrics (with upsert to guarantee creation if missing)
           const { data: perf } = await supabase
             .from('driver_performance')
             .select('*')
             .eq('driver_id', assignment.driver_id)
             .maybeSingle()
             
-          if (perf) {
-            const fare = Number(currentBooking.total_fare ?? currentBooking.total_price ?? 0)
-            await supabase.from('driver_performance')
-              .update({
-                trips_completed: (perf.trips_completed || 0) + 1,
-                earnings_total: Number(perf.earnings_total || 0) + (Number.isNaN(fare) ? 0 : fare)
-              })
-              .eq('driver_id', assignment.driver_id)
-          }
+          const currentTrips = perf?.trips_completed || 0
+          const currentEarnings = Number(perf?.earnings_total || 0)
+          const fare = Number(currentBooking.total_fare ?? currentBooking.total_price ?? 0)
+          const addedFare = Number.isNaN(fare) ? 0 : fare
+
+          await supabase.from('driver_performance')
+            .upsert({
+              driver_id: assignment.driver_id,
+              trips_completed: currentTrips + 1,
+              earnings_total: currentEarnings + addedFare,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'driver_id' })
         }
       }
 

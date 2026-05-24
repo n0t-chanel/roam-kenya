@@ -352,6 +352,17 @@ export default function DriversManagement() {
                     )
                     const activeBooking = activeAssignment?.bookings
 
+                    // Calculate completed trips and earnings dynamically to ensure absolute synchronization with direct db assignments
+                    const completedAssignments = driver.booking_assignments?.filter(a => a.completed_at) || []
+                    const dynamicTrips = completedAssignments.length
+                    const dynamicEarnings = completedAssignments.reduce((sum, a) => {
+                      const fare = Number(a.bookings?.total_fare ?? a.bookings?.total_price ?? 0)
+                      return sum + (Number.isNaN(fare) ? 0 : fare)
+                    }, 0)
+
+                    const tripsCompletedCount = Math.max(performance.trips_completed ?? 0, dynamicTrips)
+                    const earningsTotalAmount = Math.max(performance.earnings_total ?? 0, dynamicEarnings)
+
                     return (
                       <tr key={driver.id} className="border-t border-gray-100">
                         <td className="px-4 py-3 font-semibold text-gray-900">{driver.name}</td>
@@ -395,8 +406,8 @@ export default function DriversManagement() {
                             <span className="text-gray-400 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-gray-600">{performance.trips_completed ?? 0}</td>
-                        <td className="px-4 py-3 text-gray-600">{formatCurrency(performance.earnings_total ?? 0)}</td>
+                        <td className="px-4 py-3 text-gray-600">{tripsCompletedCount}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatCurrency(earningsTotalAmount)}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-2">
                             <button
