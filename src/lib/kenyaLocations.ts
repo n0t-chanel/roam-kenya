@@ -1203,6 +1203,18 @@ export const KENYA_HOTELS_RESORTS: Record<string, LocationData> = {
     latitude: -1.3243, longitude: 36.8447,
     shortLabel: "Eka Hotel", fullLabel: "Eka Hotel, Nairobi"
   },
+  "Eka Hotel Eldoret": {
+    aliases: ["Eka Hotel Eldoret", "Eka Eldoret", "eka hotel eldoret", "Eka Hotel Rupa", "Eka Hotel in Rupa", "Eka Rupa", "Eka Hotel, Rupa Mall"],
+    latitude: 0.5204, longitude: 35.2903,
+    shortLabel: "Eka Hotel Eldoret", fullLabel: "Eka Hotel, Rupa Mall, Eldoret",
+    placeId: "ChIJRz_XmFuLIRgR_Tj9S4pUq2I"
+  },
+  "Rupa Mall Eldoret": {
+    aliases: ["Rupa Mall", "rupa mall eldoret", "Rupa's Mall", "Rupa Mall Eldoret", "Rupa", "rupa"],
+    latitude: 0.5206, longitude: 35.2905,
+    shortLabel: "Rupa Mall", fullLabel: "Rupa Mall, Eldoret",
+    placeId: "ChIJ_z_XmFuLIRgR5x24QzFjKPE"
+  },
   "Safari Park Hotel Nairobi": {
     aliases: ["Safari Park", "Safari Hotel", "safari park hotel"],
     latitude: -1.2167, longitude: 36.8889,
