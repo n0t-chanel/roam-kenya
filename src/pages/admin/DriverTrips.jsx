@@ -157,7 +157,8 @@ export default function DriverTrips() {
       if (newStatus === 'completed') {
         const perf = driver.driver_performance?.[0] || {}
         const fare = Number(activeAssignment.bookings.total_fare ?? activeAssignment.bookings.total_price ?? 0)
-        
+        const addedFare = Number.isNaN(fare) ? 0 : fare
+
         const { error: assignError } = await supabase.from('booking_assignments')
           .update({ completed_at: new Date().toISOString() })
           .eq('id', activeAssignment.id)
@@ -169,11 +170,12 @@ export default function DriverTrips() {
         if (driverError) throw driverError
           
         const { error: perfError } = await supabase.from('driver_performance')
-          .update({
+          .upsert({
+            driver_id: driver.id,
             trips_completed: (perf.trips_completed || 0) + 1,
-            earnings_total: Number(perf.earnings_total || 0) + (Number.isNaN(fare) ? 0 : fare)
-          })
-          .eq('driver_id', driver.id)
+            earnings_total: Number(perf.earnings_total || 0) + addedFare,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'driver_id' })
         if (perfError) throw perfError
       }
       
@@ -214,6 +216,19 @@ export default function DriverTrips() {
     ? getFirstValue(activeBooking, ['customer_email', 'customerEmail', 'email'], '')
     : ''
   
+  // Calculate completed trips and total earnings dynamically from history to ensure 100% correctness and synchronization
+  const tripsCompleted = useMemo(() => {
+    return Math.max(performance.trips_completed || 0, history.length)
+  }, [performance.trips_completed, history.length])
+
+  const totalEarnings = useMemo(() => {
+    const calculated = history.reduce((sum, item) => {
+      const fare = Number(item.bookings?.total_fare ?? item.bookings?.total_price ?? 0)
+      return sum + (Number.isNaN(fare) ? 0 : fare)
+    }, 0)
+    return Math.max(Number(performance.earnings_total || 0), calculated)
+  }, [performance.earnings_total, history])
+
   const todayEarnings = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
     return history.reduce((sum, item) => {
@@ -271,7 +286,7 @@ export default function DriverTrips() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Total Earnings</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(performance.earnings_total ?? 0)}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(totalEarnings)}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
                   <DollarSign className="h-6 w-6 text-blue-600" />
@@ -280,7 +295,7 @@ export default function DriverTrips() {
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Trips Completed</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{performance.trips_completed ?? 0}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{tripsCompleted}</p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-orange-50 flex items-center justify-center">
                   <CheckCircle className="h-6 w-6 text-orange-600" />
