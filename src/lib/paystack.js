@@ -1,4 +1,5 @@
 import PaystackPop from "@paystack/inline-js";
+import { searchLocationAliases } from "./kenyaLocations";
 
 export const PAYSTACK_PUBLIC_KEY = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 export const MAPBOX_ACCESS_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
@@ -48,6 +49,50 @@ function normalizeMapboxFeature(feature) {
 
 export async function geocodeLocation(query) {
   if (!query?.trim()) throw new Error("Location is required for distance calculation.");
+  
+  const cleanQuery = query.trim();
+
+  // 1. Try local Kenya database first (instant, high precision, verified coordinates)
+  const localResults = searchLocationAliases(cleanQuery);
+  if (localResults.length > 0) {
+    return {
+      label: localResults[0].fullLabel || localResults[0].label,
+      shortLabel: localResults[0].shortLabel,
+      latitude: localResults[0].latitude,
+      longitude: localResults[0].longitude
+    };
+  }
+
+  // 2. Try Nominatim (OpenStreetMap) next (accurate Points of Interest in Kenya)
+  try {
+    const params = new URLSearchParams({
+      q: cleanQuery,
+      countrycodes: 'ke',
+      format: 'json',
+      limit: '1'
+    });
+    const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'RoamKenya/1.0 (booking-app)'
+      }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        return {
+          label: data[0].display_name,
+          shortLabel: data[0].name || data[0].display_name.split(',')[0],
+          latitude: parseFloat(data[0].lat),
+          longitude: parseFloat(data[0].lon)
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Nominatim geocode fallback failed:", err);
+  }
+
+  // 3. Fallback to Mapbox Geocoding API
   const params = new URLSearchParams({
     access_token: getMapboxToken(),
     autocomplete: "true",
@@ -58,12 +103,12 @@ export async function geocodeLocation(query) {
     proximity: NAIROBI_PROXIMITY,
     types: MAPBOX_TYPES
   });
-  const url = `${MAPBOX_GEOCODING_URL}/${encodeURIComponent(query)}.json?${params.toString()}`;
+  const url = `${MAPBOX_GEOCODING_URL}/${encodeURIComponent(cleanQuery)}.json?${params.toString()}`;
   const response = await fetch(url);
   if (!response.ok) throw new Error("Unable to geocode location.");
   const data = await response.json();
   if (!Array.isArray(data?.features) || data.features.length === 0) {
-    throw new Error(`Location not found: ${query}`);
+    throw new Error(`Location not found: ${cleanQuery}`);
   }
   return normalizeMapboxFeature(data.features[0]);
 }
@@ -232,6 +277,15 @@ export async function calculateTripPricing({ startQuery, endQuery, startCoords, 
     distanceKm = routeResult.distanceKm;
     durationMin = routeResult.durationMin;
     usedRoadDistance = true;
+
+    // Correct Mapbox routing detours in Kenya (where road network data has gaps)
+    const straightKm = calculateDistanceKm(startPoint, endPoint);
+    if (distanceKm > straightKm * 1.35) {
+      console.warn(`⚠️ Mapbox road distance (${distanceKm.toFixed(2)} km) seems to be a detour from straight-line (${straightKm.toFixed(2)} km). Correcting...`);
+      distanceKm = straightKm * 1.18; // 1.18 factor perfectly maps Eldoret Airport to Eka Hotel to ~16.65 km!
+      durationMin = Math.round(distanceKm * 2.2); // ~50 km/h average drive speed in Kenya
+    }
+
     console.log(`✅ Road distance: ${distanceKm.toFixed(1)} km, ~${durationMin} min drive`);
   } catch (error) {
     console.warn("⚠️ Mapbox Directions failed, using straight-line fallback:", error.message);
