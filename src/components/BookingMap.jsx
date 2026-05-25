@@ -80,8 +80,7 @@ async function fetchRoadRoute(pickup, destination) {
       alternatives: "false",
       geometries: "geojson",       // Full road geometry (not encoded polyline)
       overview: "full",            // Complete route shape
-      steps: "false",
-      annotations: "duration,distance"
+      steps: "false"
     });
 
     const response = await fetch(`${MAPBOX_DIRECTIONS_URL}/${coordinates}?${params.toString()}`);
@@ -96,17 +95,10 @@ async function fetchRoadRoute(pickup, destination) {
       features: [
         {
           type: "Feature",
-          properties: {
-            distanceKm: Number((route.distance / 1000).toFixed(1)),
-            durationMin: Math.round(route.duration / 60)
-          },
+          properties: {},
           geometry: route.geometry   // Full road-following polyline from Mapbox
         }
-      ],
-      meta: {
-        distanceKm: Number((route.distance / 1000).toFixed(1)),
-        durationMin: Math.round(route.duration / 60)
-      }
+      ]
     };
   } catch (err) {
     console.warn("⚠️ Road route fetch failed, falling back to straight line:", err.message);
@@ -152,7 +144,6 @@ export default function BookingMap({
   const routeFetchRef = useRef(null);     // Abort controller for in-flight route fetches
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(null);
-  const [routeMeta, setRouteMeta] = useState(null); // { distanceKm, durationMin }
 
   const hasDestination = destinationField && destinationField !== pickupField;
   const selectedField = useMemo(
@@ -189,8 +180,6 @@ export default function BookingMap({
         });
 
         map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "bottom-right");
-        map.addControl(new mapboxgl.ScaleControl({ maxWidth: 100, unit: "metric" }), "bottom-left");
-
         map.on("load", () => {
           if (disposed) return;
 
@@ -322,7 +311,6 @@ export default function BookingMap({
 
     if (!showRoute) {
       routeSource.setData(EMPTY_ROUTE);
-      setRouteMeta(null);
     } else {
       // Cancel any previous in-flight fetch
       if (routeFetchRef.current) routeFetchRef.current.cancelled = true;
@@ -333,7 +321,6 @@ export default function BookingMap({
         if (fetchToken.cancelled) return;
         const source = mapRef.current?.getSource("trip-route");
         if (source) source.setData(routeGeoJSON);
-        if (routeGeoJSON.meta) setRouteMeta(routeGeoJSON.meta);
       });
     }
 
@@ -406,14 +393,6 @@ export default function BookingMap({
           )}
         </div>
       </div>
-
-      {/* Route info badge (distance + duration) — shows only when route is available */}
-      {routeMeta && (
-        <div className="absolute top-3 right-3 z-10 bg-[#1A1A1A]/90 backdrop-blur-sm text-white rounded-lg px-3 py-2 shadow-lg border border-white/10 flex flex-col items-end gap-0.5">
-          <span className="text-[13px] font-bold text-[#C5A059]">{routeMeta.distanceKm} km</span>
-          <span className="text-[10px] text-white/70">≈ {routeMeta.durationMin} min drive</span>
-        </div>
-      )}
 
       {/* Map error overlay */}
       {mapError && (

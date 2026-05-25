@@ -1,16 +1,17 @@
 /**
- * Unified location search using multiple sources
- * Priority: Local DB → Nominatim (OpenStreetMap) → Mapbox API
+ * Unified Kenya location search using local data, OpenStreetMap, and Mapbox.
+ *
+ * The search returns one ranked list instead of treating providers as fallbacks:
+ * local Kenya aliases give instant confidence, OpenStreetMap adds community POIs,
+ * and Mapbox adds precise commercial geocoding with proximity bias.
  */
 
 import { searchLocationAliases } from './kenyaLocations';
 import { searchKenyaLocations } from './paystack';
 
-// Nominatim (OpenStreetMap) API endpoint
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const NOMINATIM_REVERSE_URL = 'https://nominatim.openstreetmap.org/reverse';
 
-// Kenya bounds for filtering
 const KENYA_BOUNDS = {
   north: 5.5,
   south: -4.9,
@@ -18,79 +19,404 @@ const KENYA_BOUNDS = {
   west: 33.5
 };
 
-/**
- * Search Nominatim (OpenStreetMap) for locations
- * Best for finding any place name in Kenya with high accuracy
- */
-export async function searchNominatim(query) {
+const DEFAULT_PROXIMITY = { latitude: -1.2921, longitude: 36.8219 };
+const PROVIDER_TIMEOUT_MS = 1800;
+const CACHE_TTL = 5 * 60 * 1000;
+
+const SOURCE_WEIGHT = {
+  local: 620,
+  mapbox: 390,
+  openstreetmap: 360,
+  nominatim: 360
+};
+
+const TYPE_WEIGHT = {
+  airport: 90,
+  hotel: 85,
+  mall: 70,
+  landmark: 60,
+  address: 55,
+  neighborhood: 50,
+  city: 45,
+  restaurant: 40,
+  petrol: 35
+};
+
+const searchCache = new Map();
+let activeSearchController = null;
+
+function normalizeText(value = '') {
+  return value
+    .toString()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizeProximity(proximity) {
+  const latitude = Number(proximity?.latitude);
+  const longitude = Number(proximity?.longitude);
+
+  if (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= KENYA_BOUNDS.south &&
+    latitude <= KENYA_BOUNDS.north &&
+    longitude >= KENYA_BOUNDS.west &&
+    longitude <= KENYA_BOUNDS.east
+  ) {
+    return { latitude, longitude };
+  }
+
+  return DEFAULT_PROXIMITY;
+}
+
+function getCacheKey(query, proximity) {
+  const normalized = normalizeText(query);
+  const proximityKey = proximity
+    ? `${proximity.latitude.toFixed(2)},${proximity.longitude.toFixed(2)}`
+    : 'global';
+
+  return `${normalized}|${proximityKey}`;
+}
+
+function getCachedResults(query, proximity) {
+  const entry = searchCache.get(getCacheKey(query, proximity));
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.results;
+  }
+  return null;
+}
+
+function setCachedResults(query, proximity, results) {
+  searchCache.set(getCacheKey(query, proximity), {
+    results,
+    timestamp: Date.now()
+  });
+
+  if (searchCache.size > 120) {
+    const firstKey = searchCache.keys().next().value;
+    searchCache.delete(firstKey);
+  }
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = PROVIDER_TIMEOUT_MS) {
+  const { signal, ...customOptions } = options;
+
+  if (signal?.aborted) {
+    throw new DOMException('The user aborted a request.', 'AbortError');
+  }
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+
+  if (signal) {
+    signal.addEventListener('abort', onAbort);
+  }
+
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...customOptions,
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error.name === 'AbortError' && signal?.aborted) {
+      throw error;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    if (signal) {
+      signal.removeEventListener('abort', onAbort);
+    }
+  }
+}
+
+function isWithinKenya(result) {
+  const latitude = Number(result?.latitude);
+  const longitude = Number(result?.longitude);
+
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= KENYA_BOUNDS.south &&
+    latitude <= KENYA_BOUNDS.north &&
+    longitude >= KENYA_BOUNDS.west &&
+    longitude <= KENYA_BOUNDS.east
+  );
+}
+
+function calculateDistanceKm(start, end) {
+  const toRad = (value) => (value * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(end.latitude - start.latitude);
+  const dLon = toRad(end.longitude - start.longitude);
+  const lat1 = toRad(start.latitude);
+  const lat2 = toRad(end.latitude);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusKm * c;
+}
+
+function compactUnique(parts) {
+  const seen = new Set();
+  return parts
+    .filter(Boolean)
+    .map((part) => part.toString().trim())
+    .filter(Boolean)
+    .filter((part) => {
+      const key = normalizeText(part);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function pickFirst(...values) {
+  return values.find((value) => value && value.toString().trim());
+}
+
+function getResultType(result) {
+  const type = result.type?.toLowerCase() || '';
+  const category = (result.category || result.class || '').toLowerCase();
+  const address = result.address || {};
+  const amenity = address.amenity?.toLowerCase?.() || '';
+
+  const lodgingTerms = ['hotel', 'guest_house', 'hostel', 'motel', 'apartment', 'resort', 'lodge'];
+
+  if (category === 'aeroway' || type === 'airport') return 'airport';
+  if (lodgingTerms.some((term) => type.includes(term) || amenity.includes(term))) return 'hotel';
+  if (category === 'tourism') return 'landmark';
+  if (type.includes('restaurant') || amenity.includes('restaurant')) return 'restaurant';
+  if (type.includes('mall') || category === 'shop') return 'mall';
+  if (category === 'highway' || type === 'house' || type === 'residential') return 'address';
+  if (type === 'city' || type === 'town' || type === 'village' || category === 'place') return 'city';
+  if (type === 'suburb' || type === 'neighbourhood' || type === 'quarter') return 'neighborhood';
+  if (category === 'natural' || type === 'water') return 'beach';
+  return 'landmark';
+}
+
+function normalizeNominatimResult(result) {
+  const address = result.address || {};
+  const shortLabel = pickFirst(
+    result.name,
+    result.namedetails?.name,
+    address.amenity,
+    address.hotel,
+    address.shop,
+    address.road,
+    result.display_name?.split(',')[0]
+  );
+
+  const area = pickFirst(
+    address.neighbourhood,
+    address.suburb,
+    address.quarter,
+    address.city_district,
+    address.village
+  );
+  const town = pickFirst(address.city, address.town, address.municipality, address.county);
+  const labelParts = compactUnique([shortLabel, area, town, 'Kenya']);
+  const label = labelParts.length >= 2 ? labelParts.join(', ') : result.display_name;
+
+  return {
+    label,
+    shortLabel: shortLabel || label,
+    latitude: Number.parseFloat(result.lat),
+    longitude: Number.parseFloat(result.lon),
+    type: getResultType(result),
+    source: 'openstreetmap',
+    providerScore: Math.round((Number(result.importance) || 0) * 100)
+  };
+}
+
+function normalizeLocalResult(result) {
+  return {
+    ...result,
+    label: result.fullLabel || result.label || result.name || result.shortLabel,
+    shortLabel: result.shortLabel || result.name || result.label || result.fullLabel,
+    latitude: Number(result.latitude),
+    longitude: Number(result.longitude),
+    source: 'local',
+    providerScore: 100
+  };
+}
+
+function getTextScore(query, result) {
+  const cleanQuery = normalizeText(query);
+  const title = normalizeText(result.shortLabel || result.name || '');
+  const label = normalizeText(result.label || result.fullLabel || '');
+
+  if (!cleanQuery) return 0;
+  if (title === cleanQuery || label === cleanQuery) return 480;
+  if (title.startsWith(cleanQuery)) return 390;
+  if (label.startsWith(cleanQuery)) return 340;
+  if (title.split(' ').some((word) => word.startsWith(cleanQuery))) return 280;
+  if (label.split(' ').some((word) => word.startsWith(cleanQuery))) return 240;
+  if (title.includes(cleanQuery)) return 190;
+  if (label.includes(cleanQuery)) return 150;
+  return 0;
+}
+
+function getProximityScore(result, proximity) {
+  if (!proximity || !isWithinKenya(result)) return 0;
+
+  const distanceKm = calculateDistanceKm(proximity, result);
+  result.proximityKm = Number(distanceKm.toFixed(1));
+
+  if (distanceKm < 1) return 320;
+  if (distanceKm < 5) return 270;
+  if (distanceKm < 15) return 220;
+  if (distanceKm < 35) return 170;
+  if (distanceKm < 80) return 95;
+  if (distanceKm < 160) return 45;
+  return -Math.min(160, Math.round(distanceKm / 4));
+}
+
+function scoreResult(query, result, proximity) {
+  return (
+    (result.matchScore || 0) +
+    (SOURCE_WEIGHT[result.source] || 260) +
+    (TYPE_WEIGHT[result.type] || 25) +
+    (result.providerScore || 0) +
+    getTextScore(query, result) +
+    getProximityScore(result, proximity) +
+    (isWithinKenya(result) ? 220 : -800)
+  );
+}
+
+function hasNameOverlap(a, b) {
+  const aName = normalizeText(a.shortLabel || a.name || a.label);
+  const bName = normalizeText(b.shortLabel || b.name || b.label);
+
+  if (!aName || !bName) return false;
+  return aName === bName || aName.includes(bName) || bName.includes(aName);
+}
+
+function findDuplicateIndex(results, candidate) {
+  return results.findIndex((result) => {
+    if (!isWithinKenya(result) || !isWithinKenya(candidate)) return false;
+    const distanceKm = calculateDistanceKm(result, candidate);
+    return distanceKm < 0.08 || (distanceKm < 0.45 && hasNameOverlap(result, candidate));
+  });
+}
+
+function mergeResults(current, incoming) {
+  const sources = compactUnique([
+    ...(current.sources || [current.source]),
+    ...(incoming.sources || [incoming.source])
+  ]);
+  const preferred =
+    current.source === 'local' || incoming.source !== 'local'
+      ? current
+      : incoming;
+
+  return {
+    ...preferred,
+    matchScore: Math.max(current.matchScore || 0, incoming.matchScore || 0),
+    providerScore: Math.max(current.providerScore || 0, incoming.providerScore || 0),
+    sources
+  };
+}
+
+function addResult(results, result) {
+  if (!isWithinKenya(result)) return;
+
+  const duplicateIndex = findDuplicateIndex(results, result);
+  if (duplicateIndex >= 0) {
+    results[duplicateIndex] = mergeResults(results[duplicateIndex], result);
+    return;
+  }
+
+  results.push(result);
+}
+
+function rankResults(query, results, proximity, limit) {
+  return results
+    .map((result) => ({
+      ...result,
+      rankScore: scoreResult(query, result, proximity)
+    }))
+    .sort((a, b) => b.rankScore - a.rankScore)
+    .slice(0, limit);
+}
+
+export async function searchNominatim(query, options = {}) {
   if (!query?.trim() || query.trim().length < 2) return [];
+
+  const { signal, limit = 10 } = options;
+  const cleanQuery = query.trim();
+  const localizedQuery = /\bkenya\b/i.test(cleanQuery) ? cleanQuery : `${cleanQuery}, Kenya`;
 
   try {
     const params = new URLSearchParams({
-      q: query,
+      q: localizedQuery,
       countrycodes: 'ke',
       format: 'json',
-      limit: 8,
+      addressdetails: '1',
+      namedetails: '1',
+      extratags: '1',
+      dedupe: '1',
+      limit: String(limit),
       viewbox: `${KENYA_BOUNDS.west},${KENYA_BOUNDS.south},${KENYA_BOUNDS.east},${KENYA_BOUNDS.north}`,
-      bounded: 1
+      bounded: '1'
     });
 
-    const url = `${NOMINATIM_URL}?${params.toString()}`;
-    
-    // Add User-Agent header (required by Nominatim)
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(`${NOMINATIM_URL}?${params.toString()}`, {
       headers: {
+        'Accept-Language': 'en',
         'User-Agent': 'RoamKenya/1.0 (booking-app)'
-      }
+      },
+      signal
     });
 
     if (!response.ok) {
-      console.warn('Nominatim API error:', response.status);
+      console.warn('OpenStreetMap search error:', response.status);
       return [];
     }
 
     const data = await response.json();
+    if (!Array.isArray(data)) return [];
 
-    if (!Array.isArray(data)) {
-      return [];
-    }
-
-    // Normalize results to match our format
-    return data.map(result => ({
-      label: result.display_name,
-      shortLabel: result.name || result.display_name.split(',')[0],
-      latitude: parseFloat(result.lat),
-      longitude: parseFloat(result.lon),
-      type: getResultType(result),
-      source: 'nominatim'
-    }));
+    return data.map(normalizeNominatimResult).filter(isWithinKenya);
   } catch (error) {
-    console.error('Nominatim search error:', error);
+    if (error.name === 'AbortError' || signal?.aborted) {
+      throw error;
+    }
+    console.error('OpenStreetMap search error:', error);
     return [];
   }
 }
 
-/**
- * Reverse geocode coordinates using Nominatim
- */
-export async function reverseGeocodeNominatim({ latitude, longitude }) {
+export async function reverseGeocodeNominatim({ latitude, longitude }, options = {}) {
   if (!latitude || !longitude) {
     throw new Error('Invalid coordinates provided.');
   }
+
+  const { signal } = options;
 
   try {
     const params = new URLSearchParams({
       lat: latitude,
       lon: longitude,
-      format: 'json'
+      format: 'json',
+      addressdetails: '1'
     });
 
-    const url = `${NOMINATIM_REVERSE_URL}?${params.toString()}`;
-
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(`${NOMINATIM_REVERSE_URL}?${params.toString()}`, {
       headers: {
+        'Accept-Language': 'en',
         'User-Agent': 'RoamKenya/1.0 (booking-app)'
-      }
+      },
+      signal
     });
 
     if (!response.ok) {
@@ -98,122 +424,79 @@ export async function reverseGeocodeNominatim({ latitude, longitude }) {
     }
 
     const data = await response.json();
+    const normalized = normalizeNominatimResult(data);
 
     return {
-      label: data.display_name,
-      shortLabel: data.name || data.address?.city || data.address?.town || 'Location',
-      latitude: parseFloat(data.lat),
-      longitude: parseFloat(data.lon)
+      label: normalized.label,
+      shortLabel: normalized.shortLabel,
+      latitude: normalized.latitude,
+      longitude: normalized.longitude
     };
   } catch (error) {
-    console.error('Nominatim reverse geocoding error:', error);
+    if (error.name === 'AbortError' || signal?.aborted) {
+      throw error;
+    }
+    console.error('OpenStreetMap reverse geocoding error:', error);
     throw error;
   }
 }
 
-/**
- * Determine location type from Nominatim result
- */
-function getResultType(result) {
-  const type = result.type?.toLowerCase() || '';
-  const category = result.category?.toLowerCase() || '';
-
-  if (category === 'aeroway' || type === 'airport') return 'airport';
-  if (category === 'tourism') return 'landmark';
-  if (category === 'natural' || type === 'water') return 'beach';
-  if (category === 'amenity' && (type === 'hotel' || type === 'restaurant')) return 'hotel';
-  if (category === 'admin_level') return 'city';
-  return 'landmark';
-}
-
-/**
- * Unified location search with fallback chain
- * 1. Local Kenya database (instant, high precision)
- * 2. Nominatim/OpenStreetMap (comprehensive, reliable)
- * 3. Mapbox API (fallback, comprehensive)
- */
-export async function searchLocationsUnified(query) {
+export async function searchLocationsUnified(query, options = {}) {
   if (!query?.trim() || query.trim().length < 2) return [];
 
-  const results = new Map(); // Use Map to avoid duplicates
+  if (activeSearchController) {
+    activeSearchController.abort();
+  }
 
-  // Step 1: Try local Kenya database first (instant results)
-  console.log('🔍 Searching local Kenya database for:', query);
-  const localResults = searchLocationAliases(query);
-  localResults.forEach(result => {
-    const key = `${result.latitude.toFixed(4)}_${result.longitude.toFixed(4)}`;
-    results.set(key, { ...result, source: 'local', priority: 3 });
+  activeSearchController = new AbortController();
+  const signal = activeSearchController.signal;
+  const proximity = normalizeProximity(options.proximity);
+  const limit = options.limit || 8;
+  const cleanQuery = query.trim();
+
+  const cached = getCachedResults(cleanQuery, proximity);
+  if (cached) return cached;
+
+  const results = [];
+
+  searchLocationAliases(cleanQuery, 12)
+    .map(normalizeLocalResult)
+    .forEach((result) => addResult(results, result));
+
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+  const providerResults = await Promise.allSettled([
+    searchNominatim(cleanQuery, { signal, limit: 10 }),
+    searchKenyaLocations(cleanQuery, { signal, proximity, limit: 10 })
+  ]);
+
+  if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+  providerResults.forEach((providerResult) => {
+    if (providerResult.status !== 'fulfilled') {
+      const error = providerResult.reason;
+      if (error?.name !== 'AbortError') {
+        console.warn('Location provider failed:', error);
+      }
+      return;
+    }
+
+    providerResult.value.forEach((result) => addResult(results, result));
   });
 
-  // If we found exact matches locally, return them
-  if (localResults.length > 0 && localResults[0].matchScore > 900) {
-    console.log('✅ Found local matches:', localResults.length);
-    return Array.from(results.values()).sort((a, b) => b.priority - a.priority);
-  }
+  const finalResults = rankResults(cleanQuery, results, proximity, limit);
+  setCachedResults(cleanQuery, proximity, finalResults);
 
-  // Step 2: Try Nominatim (OpenStreetMap) for comprehensive search
-  console.log('🗺️  Searching OpenStreetMap (Nominatim) for:', query);
-  try {
-    const nominatimResults = await searchNominatim(query);
-    nominatimResults.forEach(result => {
-      const key = `${result.latitude.toFixed(4)}_${result.longitude.toFixed(4)}`;
-      if (!results.has(key)) {
-        results.set(key, { ...result, priority: 2 });
-      }
-    });
-    console.log('✅ Nominatim results:', nominatimResults.length);
-  } catch (error) {
-    console.warn('Nominatim search failed:', error);
-  }
-
-  // If we have enough results from Nominatim, return them
-  if (results.size >= 5) {
-    return Array.from(results.values())
-      .sort((a, b) => (b.priority || 0) - (a.priority || 0))
-      .slice(0, 8);
-  }
-
-  // Step 3: Fallback to Mapbox API for additional coverage
-  console.log('🔵 Searching Mapbox API for:', query);
-  try {
-    const mapboxResults = await searchKenyaLocations(query);
-    mapboxResults.forEach(result => {
-      const key = `${result.latitude.toFixed(4)}_${result.longitude.toFixed(4)}`;
-      if (!results.has(key)) {
-        results.set(key, { ...result, source: 'mapbox', priority: 1 });
-      }
-    });
-    console.log('✅ Mapbox results:', mapboxResults.length);
-  } catch (error) {
-    console.warn('Mapbox search failed:', error);
-  }
-
-  // Return combined results sorted by priority and deduped
-  const combinedResults = Array.from(results.values())
-    .sort((a, b) => {
-      // Sort by priority (local > nominatim > mapbox)
-      if (b.priority !== a.priority) {
-        return (b.priority || 0) - (a.priority || 0);
-      }
-      // Then by match score if available
-      if (b.matchScore && a.matchScore) {
-        return b.matchScore - a.matchScore;
-      }
-      return 0;
-    })
-    .slice(0, 8);
-
-  console.log('📍 Final results:', combinedResults.length, combinedResults.map(r => r.shortLabel).join(', '));
-  return combinedResults;
+  return finalResults;
 }
 
-/**
- * Autocomplete for efficient searching (debounced)
- */
-export async function autocompleteLocation(query) {
+export async function autocompleteLocation(query, options = {}) {
   try {
-    return await searchLocationsUnified(query);
+    return await searchLocationsUnified(query, options);
   } catch (error) {
+    if (error.name === 'AbortError') {
+      throw error;
+    }
     console.error('Autocomplete error:', error);
     return [];
   }
