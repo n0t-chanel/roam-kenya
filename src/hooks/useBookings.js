@@ -195,7 +195,7 @@ export function useBookings() {
     }
   }, [])
 
-  const updateBookingStatus = useCallback(async (bookingId, newStatus) => {
+	  const updateBookingStatus = useCallback(async (bookingId, newStatus) => {
     try {
       setError(null)
       setLoading(true)
@@ -266,7 +266,40 @@ export function useBookings() {
     } finally {
       setLoading(false)
     }
-  }, [])
+	  }, [])
+
+	  const updateBookingQuote = useCallback(async (bookingId, totalPriceCents) => {
+	    try {
+	      setError(null)
+	      setLoading(true)
+
+	      const quoteAmount = Number(totalPriceCents)
+	      if (!Number.isFinite(quoteAmount) || quoteAmount <= 0) {
+	        throw new Error('Enter a valid quote amount.')
+	      }
+
+	      const reservationFeeCents = Math.round(quoteAmount * 0.3)
+	      const { data, error: updateError } = await supabase
+	        .from('bookings')
+	        .update({
+	          total_price: quoteAmount,
+	          price_amount: reservationFeeCents,
+	          payment_status: 'quote_ready',
+	          updated_at: new Date().toISOString()
+	        })
+	        .eq('id', bookingId)
+	        .select()
+	        .maybeSingle()
+
+	      if (updateError) throw updateError
+	      return data
+	    } catch (err) {
+	      setError(err.message)
+	      throw err
+	    } finally {
+	      setLoading(false)
+	    }
+	  }, [])
 
   const subscribeToBookings = useCallback((callback) => {
     const channel = supabase
@@ -287,9 +320,10 @@ export function useBookings() {
 
   return {
     loading,
-    error,
-    fetchBookings,
-    updateBookingStatus,
-    subscribeToBookings
-  }
+	    error,
+	    fetchBookings,
+	    updateBookingStatus,
+	    updateBookingQuote,
+	    subscribeToBookings
+	  }
 }

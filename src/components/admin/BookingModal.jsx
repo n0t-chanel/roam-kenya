@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import DriverAssignmentModal from './DriverAssignmentModal'
 import { useBookings, formatCurrency, formatDateTime, getBookingDateTimeValue, getFirstValue, getStatusBadgeClass, getStatusLabel } from '../../hooks/useBookings'
 
 export default function BookingModal({ booking, isOpen, onClose, onStatusChange, canAssignDriver = false }) {
-  const { updateBookingStatus } = useBookings()
+  const { updateBookingStatus, updateBookingQuote } = useBookings()
   const [actionLoading, setActionLoading] = useState(null)
   const [error, setError] = useState(null)
   const [assignmentOpen, setAssignmentOpen] = useState(false)
+  const [quoteAmountKes, setQuoteAmountKes] = useState('')
 
   const bookingId = booking?.id ? `#${booking.id.slice(0, 6).toUpperCase()}` : '—'
   const customerName = getFirstValue(booking, ['customer_name', 'customerName', 'customer.full_name', 'customer.name', 'full_name', 'name', 'profiles.full_name', 'user.full_name'], 'Unknown')
@@ -27,8 +28,20 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
   const totalFare = formatCurrency(totalFareCents)
   const reservationFee = formatCurrency(reservationFeeCents)
   const finalPayment = formatCurrency(finalPaymentCents)
+  const serviceLabel = getFirstValue(booking, ['service_category', 'service_type', 'serviceCategory', 'serviceType'], '')
+  const paymentStatus = getFirstValue(booking, ['payment_status', 'paymentStatus'], '')
+  const isSafariQuote =
+    serviceLabel.toString().toLowerCase().includes('safari') ||
+    ['awaiting_quote', 'quote_ready'].includes(paymentStatus)
   const driverName = getFirstValue(booking, ['driver_name', 'assigned_driver_name', 'driver.full_name', 'driver.name'], 'Unassigned')
   const agentName = getFirstValue(booking, ['agent_name', 'assigned_agent_name', 'agent.full_name', 'agent.name'], 'Unassigned')
+  const notes = getFirstValue(booking, ['notes'], '')
+
+  useEffect(() => {
+    if (!isOpen) return
+    setError(null)
+    setQuoteAmountKes(totalFareCents ? String(Number(totalFareCents) / 100) : '')
+  }, [isOpen, booking?.id, totalFareCents])
 
   const pickupDateTime = useMemo(() => {
     const value = getBookingDateTimeValue(booking)
@@ -55,6 +68,28 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
     await handleStatusUpdate('cancelled')
   }
 
+  const handleQuoteSubmit = async (event) => {
+    event.preventDefault()
+    if (!booking?.id) return
+
+    const amountKes = Number(quoteAmountKes)
+    if (!Number.isFinite(amountKes) || amountKes <= 0) {
+      setError('Enter a valid quote amount in KES.')
+      return
+    }
+
+    setError(null)
+    setActionLoading('quote')
+    try {
+      const updated = await updateBookingQuote(booking.id, Math.round(amountKes * 100))
+      if (onStatusChange) onStatusChange({ ...booking, ...updated })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   if (!isOpen || !booking) return null
 
   return (
@@ -74,12 +109,14 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Journey Details</h3>
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <p className="text-xs text-gray-500">Pickup</p>
-                <p className="text-sm text-gray-900">{pickupLocation}</p>
-                <p className="text-xs text-gray-500 mt-2">Pickup Date/Time</p>
-                <p className="text-sm text-gray-900">{pickupDateTime}</p>
-              </div>
+	              <div>
+	                <p className="text-xs text-gray-500">Pickup</p>
+	                <p className="text-sm text-gray-900">{pickupLocation}</p>
+	                <p className="text-xs text-gray-500 mt-2">Pickup Date/Time</p>
+	                <p className="text-sm text-gray-900">{pickupDateTime}</p>
+	                <p className="text-xs text-gray-500 mt-2">Duration</p>
+	                <p className="text-sm text-gray-900">{getFirstValue(booking, ['duration'], '—')}</p>
+	              </div>
               <div>
                 <p className="text-xs text-gray-500">Destination</p>
                 <p className="text-sm text-gray-900">{destination}</p>
@@ -104,22 +141,53 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
             </div>
           </div>
 
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Payment Summary</h3>
+	          <div>
+	            <h3 className="text-sm font-semibold text-gray-900 mb-3">Payment Summary</h3>
             <div className="space-y-2 text-sm text-gray-700">
               <div className="flex items-center justify-between">
                 <span>Total Trip Fare</span>
                 <span>{totalFare}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Reservation Fee Paid (30%)</span>
-                <span>{reservationFee}</span>
-              </div>
+	              </div>
+	              <div className="flex items-center justify-between">
+	                <span>Reservation Fee (30%)</span>
+	                <span>{reservationFee}</span>
+	              </div>
               <div className="flex items-center justify-between">
                 <span>Final Payment Due</span>
                 <span>{finalPayment}</span>
-              </div>
-            </div>
+	            </div>
+	          </div>
+
+	          {isSafariQuote && (
+	            <form onSubmit={handleQuoteSubmit} className="rounded-lg border border-[#C5A059]/30 bg-[#C5A059]/5 p-4">
+	              <h3 className="text-sm font-semibold text-gray-900 mb-3">Safari Quote</h3>
+	              {notes && <p className="mb-3 text-xs text-gray-600">{notes}</p>}
+	              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+	                <div className="flex-1">
+	                  <label className="text-xs font-semibold text-gray-500">Quote amount (KES)</label>
+	                  <input
+	                    type="number"
+	                    min="1"
+	                    step="1"
+	                    value={quoteAmountKes}
+	                    onChange={(event) => setQuoteAmountKes(event.target.value)}
+	                    className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+	                    placeholder="e.g., 85000"
+	                  />
+	                </div>
+	                <button
+	                  type="submit"
+	                  disabled={actionLoading === 'quote'}
+	                  className="rounded-md bg-[#B35A38] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+	                >
+	                  {actionLoading === 'quote' ? 'Saving...' : 'Send Quote'}
+	                </button>
+	              </div>
+	              <p className="mt-2 text-xs text-gray-600">
+	                The client can pay the 30% reservation after this quote is saved.
+	              </p>
+	            </form>
+	          )}
           </div>
 
           <div>

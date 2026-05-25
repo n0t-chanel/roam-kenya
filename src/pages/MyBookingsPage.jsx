@@ -39,8 +39,9 @@ export default function MyBookingsPage() {
   const [actionMessage, setActionMessage] = useState(null);
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [savingBookingId, setSavingBookingId] = useState(null);
-  const [processingRefundBookingId, setProcessingRefundBookingId] = useState(null);
-  const [processingFinalPaymentBookingId, setProcessingFinalPaymentBookingId] = useState(null);
+	  const [processingRefundBookingId, setProcessingRefundBookingId] = useState(null);
+	  const [processingReservationBookingId, setProcessingReservationBookingId] = useState(null);
+	  const [processingFinalPaymentBookingId, setProcessingFinalPaymentBookingId] = useState(null);
   const [retryingVerificationBookingId, setRetryingVerificationBookingId] = useState(null);
   const [editForm, setEditForm] = useState({
     pickup_location: "",
@@ -283,7 +284,7 @@ export default function MyBookingsPage() {
     }
   };
 
-  const retryReservationVerification = async (booking) => {
+	  const retryReservationVerification = async (booking) => {
     if (!booking.reservation_reference) {
       setActionMessage({ type: "error", message: "No reservation payment reference found." });
       return;
@@ -309,9 +310,107 @@ export default function MyBookingsPage() {
     } finally {
       setRetryingVerificationBookingId(null);
     }
-  };
+	  };
 
-  const processFinalPayment = async (booking) => {
+	  const startReservationPayment = async (booking) => {
+	    const reservationAmount = Number(booking.price_amount || 0);
+	    if (reservationAmount <= 0) {
+	      setActionMessage({ type: "error", message: "This booking is still waiting for a quote." });
+	      return;
+	    }
+
+	    setProcessingReservationBookingId(booking.id);
+	    setActionMessage(null);
+
+	    const reference = createPaymentReference(booking.id);
+	    try {
+	      const { error: insertError } = await supabase.from("payments").insert({
+	        booking_id: booking.id,
+	        user_id: user.id,
+	        amount: reservationAmount,
+	        payment_method: "paystack_reservation",
+	        reference,
+	        status: "pending",
+	        paystack_response: null
+	      });
+
+	      if (insertError) throw insertError;
+
+	      startPaystackCheckout({
+	        email: user.email,
+	        amount: reservationAmount,
+	        reference,
+	        metadata: {
+	          bookingId: booking.id,
+	          userId: user.id,
+	          paymentStage: "reservation"
+	        },
+	        onSuccess: async (transaction) => {
+	          try {
+	            const result = await verifyPaymentServerSide(supabase, {
+	              reference,
+	              bookingId: booking.id,
+	              expectedAmount: reservationAmount,
+	              paymentStage: "reservation",
+	              checkoutResponse: transaction
+	            });
+	            if (!result?.success) throw new Error(result?.error || "Reservation payment verification failed.");
+
+	            const paidAt = new Date().toISOString();
+	            setBookings((prev) =>
+	              prev.map((b) =>
+	                b.id === booking.id
+	                  ? {
+	                      ...b,
+	                      payment_status: "reservation_paid",
+	                      status: "confirmed",
+	                      reservation_reference: reference,
+	                      reservation_paid_at: paidAt
+	                    }
+	                  : b
+	              )
+	            );
+	            setActionMessage({ type: "success", message: "Reservation paid successfully. Your safari booking is confirmed." });
+
+	            try {
+	              await sendBookingEmail({
+	                bookingId: booking.id,
+	                userEmail: user.email,
+	                userName: user.user_metadata?.full_name || user.email,
+	                pickupLocation: booking.pickup_location,
+	                destinationLocation: booking.destination_location,
+	                pickupDate: booking.booking_date,
+	                pickupTime: booking.pickup_time,
+	                passengers: booking.passengers,
+	                vehicleType: booking.vehicle_type,
+	                serviceType: `${booking.service_category || "Trip"} (Reserved & Paid)`
+	              });
+	            } catch (emailErr) {
+	              console.error("Reservation confirmation email failed:", emailErr);
+	            }
+	          } catch (err) {
+	            setActionMessage({ type: "error", message: `Reservation payment completed but verification failed: ${err.message}` });
+	          } finally {
+	            setProcessingReservationBookingId(null);
+	          }
+	        },
+	        onCancel: async () => {
+	          await supabase
+	            .from("payments")
+	            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+	            .eq("reference", reference)
+	            .eq("user_id", user.id);
+	          setActionMessage({ type: "error", message: "Reservation payment was cancelled." });
+	          setProcessingReservationBookingId(null);
+	        }
+	      });
+	    } catch (err) {
+	      setActionMessage({ type: "error", message: `Unable to start reservation payment: ${err.message}` });
+	      setProcessingReservationBookingId(null);
+	    }
+	  };
+
+	  const processFinalPayment = async (booking) => {
     const totalPrice = Number(booking.total_price || 0);
     const reservationFee = Number(booking.price_amount || 0);
     const balanceDue = Math.max(totalPrice - reservationFee, 0);
@@ -469,14 +568,18 @@ export default function MyBookingsPage() {
                     <span className="px-3 py-1 text-sm font-semibold border border-gray-300 bg-gray-100 text-gray-800 uppercase">
                       {booking.status || "pending"}
                     </span>
-                    <span
-                      className={`px-3 py-1 text-sm font-semibold border uppercase ${
-                        booking.payment_status === "paid"
-                          ? "border-green-300 bg-green-100 text-green-700"
-                          : booking.payment_status === "reservation_paid"
-                            ? "border-blue-300 bg-blue-100 text-blue-700"
-                          : "border-yellow-300 bg-yellow-100 text-yellow-700"
-                      }`}
+	                    <span
+	                      className={`px-3 py-1 text-sm font-semibold border uppercase ${
+	                        booking.payment_status === "paid"
+	                          ? "border-green-300 bg-green-100 text-green-700"
+	                          : booking.payment_status === "reservation_paid"
+	                            ? "border-blue-300 bg-blue-100 text-blue-700"
+	                            : booking.payment_status === "quote_ready"
+	                              ? "border-green-300 bg-green-50 text-green-700"
+	                              : booking.payment_status === "awaiting_quote"
+	                                ? "border-[#C5A059]/40 bg-[#C5A059]/10 text-[#8B6B2E]"
+	                          : "border-yellow-300 bg-yellow-100 text-yellow-700"
+	                      }`}
                     >
                       {booking.payment_status || "unpaid"}
                     </span>
@@ -568,14 +671,18 @@ export default function MyBookingsPage() {
                         <p className="font-semibold text-gray-900">{booking.booking_date}</p>
                       </div>
                     </div>
-                    <div className="flex items-start gap-3">
-                      <Clock size={17} className="text-[#B35A38] mt-0.5" />
-                      <div>
-                        <p className="text-gray-500">Time</p>
-                        <p className="font-semibold text-gray-900">{booking.pickup_time}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
+	                    <div className="flex items-start gap-3">
+	                      <Clock size={17} className="text-[#B35A38] mt-0.5" />
+	                      <div>
+	                        <p className="text-gray-500">Time</p>
+	                        <p className="font-semibold text-gray-900">{booking.pickup_time}</p>
+	                      </div>
+	                    </div>
+	                    <div>
+	                      <p className="text-gray-500">Duration</p>
+	                      <p className="font-semibold text-gray-900">{booking.duration || "Not specified"}</p>
+	                    </div>
+	                    <div className="flex items-start gap-3">
                       <Car size={17} className="text-[#B35A38] mt-0.5" />
                       <div>
                         <p className="text-gray-500">Vehicle</p>
@@ -586,12 +693,16 @@ export default function MyBookingsPage() {
                       <p className="text-gray-500">Booking ID</p>
                       <p className="font-semibold text-gray-900 break-all">{booking.id}</p>
                     </div>
-                    <div>
-                      <p className="text-gray-500">Reserved Amount</p>
-                      <p className="font-semibold text-gray-900">
-                        {booking.price_amount ? formatKesFromCents(booking.price_amount) : "Not paid"}
-                      </p>
-                    </div>
+	                    <div>
+	                      <p className="text-gray-500">Reserved Amount</p>
+	                      <p className="font-semibold text-gray-900">
+	                        {booking.payment_status === "awaiting_quote"
+	                          ? "Quote pending"
+	                          : booking.price_amount
+	                            ? formatKesFromCents(booking.price_amount)
+	                            : "Not paid"}
+	                      </p>
+	                    </div>
                     <div>
                       <p className="text-gray-500">Total Trip Price</p>
                       <p className="font-semibold text-gray-900">
@@ -677,8 +788,8 @@ export default function MyBookingsPage() {
                           Revise booking
                         </button>
                       )}
-                      {booking.payment_status === "reservation_paid" && booking.status !== "cancelled" && (
-                        <button
+	                      {booking.payment_status === "reservation_paid" && booking.status !== "cancelled" && (
+	                        <button
                           type="button"
                           disabled={processingFinalPaymentBookingId === booking.id}
                           onClick={() => processFinalPayment(booking)}
@@ -689,10 +800,32 @@ export default function MyBookingsPage() {
                           ) : (
                             <Car size={14} />
                           )}
-                          Confirm Trip & Pay Balance
-                        </button>
-                      )}
-                      {booking.payment_status === "unpaid" && booking.reservation_reference && booking.status !== "cancelled" && (
+	                          Confirm Trip & Pay Balance
+	                        </button>
+	                      )}
+	                      {booking.payment_status === "quote_ready" &&
+	                        booking.status !== "cancelled" &&
+	                        Number(booking.price_amount || 0) > 0 && (
+	                        <button
+	                          type="button"
+	                          disabled={processingReservationBookingId === booking.id}
+	                          onClick={() => startReservationPayment(booking)}
+	                          className="inline-flex items-center gap-2 px-4 py-2 border border-green-500 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+	                        >
+	                          {processingReservationBookingId === booking.id ? (
+	                            <Loader size={14} className="animate-spin" />
+	                          ) : (
+	                            <Car size={14} />
+	                          )}
+	                          Pay 30% Reservation
+	                        </button>
+	                      )}
+	                      {booking.payment_status === "awaiting_quote" && booking.status !== "cancelled" && (
+	                        <span className="inline-flex items-center px-4 py-2 border border-[#C5A059]/40 bg-[#C5A059]/10 text-sm font-semibold text-[#8B6B2E]">
+	                          Waiting for admin quote
+	                        </span>
+	                      )}
+	                      {booking.payment_status === "unpaid" && booking.reservation_reference && booking.status !== "cancelled" && (
                         <button
                           type="button"
                           disabled={retryingVerificationBookingId === booking.id}
