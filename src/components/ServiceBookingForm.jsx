@@ -133,6 +133,20 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
 
   const isLocationField = (name) => name === resolvedLocationFields.pickupField || name === resolvedLocationFields.dropoffField;
 
+  const getSearchProximity = (fieldName) => {
+    if (fieldName !== resolvedLocationFields.pickupField) {
+      return pickupGps || locationCoords[resolvedLocationFields.pickupField] || null;
+    }
+
+    return pickupGps || locationCoords[resolvedLocationFields.dropoffField] || null;
+  };
+
+  const normalizeSuggestionForDisplay = (suggestion) => ({
+    ...suggestion,
+    label: suggestion.label || suggestion.fullLabel || suggestion.name || suggestion.shortLabel || "Kenya location",
+    shortLabel: suggestion.shortLabel || suggestion.name || suggestion.label || suggestion.fullLabel || "Kenya location"
+  });
+
   const queueLocationSearch = (fieldName, value) => {
     const query = value?.trim();
     if (searchDebounceRef.current[fieldName]) {
@@ -141,30 +155,49 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
 
     if (!query || query.length < 2) {
       setLocationSuggestions((prev) => ({ ...prev, [fieldName]: [] }));
+      setLocationLoadingField((current) => (current === fieldName ? null : current));
       return;
     }
 
-    // Try local Kenya database first (instant, precise results)
-    const aliasResults = searchLocationAliases(query);
+    const requestId = Date.now();
+    searchDebounceRef.current[fieldName + '_id'] = requestId;
+
+    const aliasResults = searchLocationAliases(query).map(normalizeSuggestionForDisplay);
     if (aliasResults.length > 0) {
       setLocationSuggestions((prev) => ({ ...prev, [fieldName]: aliasResults }));
-      setLocationLoadingField(null);
-      return;
+      setLocationLoadingField((current) => (current === fieldName ? null : current));
     }
 
     // Use unified search (Local → Nominatim → Mapbox) with debounce
     searchDebounceRef.current[fieldName] = setTimeout(async () => {
+      // Double check if this is still the active request
+      if (searchDebounceRef.current[fieldName + '_id'] !== requestId) return;
+
       setLocationLoadingField(fieldName);
       try {
-        const suggestions = await searchLocationsUnified(query);
-        setLocationSuggestions((prev) => ({ ...prev, [fieldName]: suggestions }));
+        const suggestions = await searchLocationsUnified(query, {
+          proximity: getSearchProximity(fieldName)
+        });
+        if (searchDebounceRef.current[fieldName + '_id'] === requestId) {
+          setLocationSuggestions((prev) => ({
+            ...prev,
+            [fieldName]: suggestions.map(normalizeSuggestionForDisplay)
+          }));
+        }
       } catch (error) {
-        console.error("Location suggestion error:", error);
-        setLocationSuggestions((prev) => ({ ...prev, [fieldName]: [] }));
+        // Ignore AbortError as it was cancelled intentionally by a subsequent request
+        if (error.name !== 'AbortError') {
+          console.error("Location suggestion error:", error);
+          if (searchDebounceRef.current[fieldName + '_id'] === requestId && aliasResults.length === 0) {
+            setLocationSuggestions((prev) => ({ ...prev, [fieldName]: [] }));
+          }
+        }
       } finally {
-        setLocationLoadingField((current) => (current === fieldName ? null : current));
+        if (searchDebounceRef.current[fieldName + '_id'] === requestId) {
+          setLocationLoadingField((current) => (current === fieldName ? null : current));
+        }
       }
-    }, 250);
+    }, 220);
   };
 
   const handleLocationSelect = (fieldName, suggestion) => {
@@ -175,6 +208,9 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
       return;
     }
     
+    // Invalidate any ongoing searches
+    searchDebounceRef.current[fieldName + '_id'] = Date.now();
+
     if (fieldName === resolvedLocationFields.pickupField) {
       setPickupGps(null);
     }
@@ -195,6 +231,9 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
 
   const handleMapLocationPick = async (fieldName, coordinates) => {
     if (!fieldName || !coordinates) return;
+
+    // Invalidate any ongoing searches
+    searchDebounceRef.current[fieldName + '_id'] = Date.now();
 
     const fallbackLabel = `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}`;
 
@@ -438,7 +477,7 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
         payment_status: "unpaid",
         price_amount: pricing.reservationFeeCents,
         total_price: pricing.totalPriceCents,
-        notes: `${formData.specialRequests || ""} Phone: ${phoneNumber}. Distance: ${pricing.distanceKm} km`,
+        notes: [formData.specialRequests, `Phone: ${phoneNumber}`].filter(Boolean).join(". "),
         created_at: new Date(),
         updated_at: new Date()
       };
@@ -961,13 +1000,15 @@ Thank you for booking with us!
                             let IconComponent = MapPin;
                             if (suggestion.type === "airport") {
                               IconComponent = Plane;
-                            } else if (suggestion.type === "landmark") {
-                              IconComponent = MapPin;
+                            } else if (suggestion.type === "hotel") {
+                              IconComponent = Hotel;
                             }
+                            const title = suggestion.shortLabel || suggestion.label || suggestion.fullLabel || suggestion.name || "Kenya location";
+                            const subtitle = suggestion.label || suggestion.fullLabel || "Kenya";
                             
                             return (
                               <button
-                                key={`${field.name}-${suggestion.latitude}-${suggestion.longitude}-${suggestion.label}`}
+                                key={`${field.name}-${suggestion.latitude}-${suggestion.longitude}-${subtitle}`}
                                 type="button"
                                 onMouseDown={(e) => { e.preventDefault(); handleLocationSelect(field.name, suggestion); }}
                                 className="group w-full text-left px-4 py-3 hover:bg-[#1A1A1A] border-b border-gray-50 last:border-b-0 flex items-start gap-3 transition-colors cursor-pointer"
@@ -976,8 +1017,8 @@ Thank you for booking with us!
                                   <IconComponent size={16} className="text-[#C5A059] group-hover:text-white transition-colors" />
                                 </div>
                                 <div className="min-w-0 flex-1">
-                                  <p className="text-sm font-semibold text-gray-900 group-hover:text-white transition-colors">{suggestion.shortLabel || suggestion.label}</p>
-                                  <p className="text-xs text-gray-500 truncate group-hover:text-white/70 transition-colors">{suggestion.label}</p>
+                                  <p className="text-sm font-semibold text-gray-900 group-hover:text-white transition-colors">{title}</p>
+                                  <p className="text-xs text-gray-500 truncate group-hover:text-white/70 transition-colors">{subtitle}</p>
                                 </div>
                               </button>
                             );
@@ -1037,17 +1078,7 @@ Thank you for booking with us!
                   </div>
                   {tripEstimate ? (
                     <div className="px-4 pb-4">
-                      <div className={`grid gap-2 text-center ${tripEstimate.durationMin ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'}`}>
-                         <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
-                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Road Dist.</p>
-                           <p className="text-lg font-black text-gray-900 mt-0.5">{tripEstimate.distanceKm}<span className="text-xs font-medium text-gray-400 ml-0.5">km</span></p>
-                         </div>
-                         {tripEstimate.durationMin && (
-                           <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
-                             <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Drive Time</p>
-                             <p className="text-lg font-black text-gray-900 mt-0.5">{tripEstimate.durationMin}<span className="text-xs font-medium text-gray-400 ml-0.5">min</span></p>
-                           </div>
-                         )}
+                      <div className="grid gap-2 text-center grid-cols-1 sm:grid-cols-2">
                         <div className="bg-white rounded-lg border border-gray-100 p-3 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Fare</p>
                           <p className="text-lg font-black text-gray-900 mt-0.5">{formatKesFromCents(tripEstimate.totalPriceCents)}</p>
@@ -1265,10 +1296,6 @@ Thank you for booking with us!
                 <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                   <p className="text-gray-600">Total Trip Price</p>
                   <p className="text-xl font-bold text-gray-900">{formatKesFromCents(activeBooking?.totalPriceAmount || 0)}</p>
-                </div>
-                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
-                  <p className="text-gray-600">Distance</p>
-                  <p className="font-semibold text-gray-900">{activeBooking?.distanceKm || 0} km</p>
                 </div>
                 <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-1">
                   <p className="text-gray-600">Reservation Fee</p>

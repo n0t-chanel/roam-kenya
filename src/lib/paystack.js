@@ -10,7 +10,8 @@ const MAPBOX_GEOCODING_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places"
 const MAPBOX_DIRECTIONS_URL = "https://api.mapbox.com/directions/v5/mapbox/driving";
 const KENYA_BBOX = "33.501,-4.899,41.899,5.430";
 const NAIROBI_PROXIMITY = "36.8219,-1.2921";
-const MAPBOX_TYPES = "address,poi,place,locality,neighborhood";
+const MAPBOX_TYPES = "poi,address,place,locality,neighborhood,region";
+const DEFAULT_MAPBOX_PROXIMITY = { longitude: 36.8219, latitude: -1.2921 };
 
 export function getReservationAmount(totalPriceCents) {
   return Math.round(totalPriceCents * RESERVATION_PERCENTAGE);
@@ -32,6 +33,31 @@ function getMapboxToken() {
   return MAPBOX_ACCESS_TOKEN;
 }
 
+function formatMapboxProximity(proximity) {
+  const longitude = Number(proximity?.longitude);
+  const latitude = Number(proximity?.latitude);
+
+  if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+    return `${longitude},${latitude}`;
+  }
+
+  return `${DEFAULT_MAPBOX_PROXIMITY.longitude},${DEFAULT_MAPBOX_PROXIMITY.latitude}`;
+}
+
+function inferMapboxType(feature) {
+  const placeType = Array.isArray(feature.place_type) ? feature.place_type[0] : "";
+  const category = feature.properties?.category?.toLowerCase?.() || "";
+
+  if (category.includes("airport")) return "airport";
+  if (category.includes("hotel") || category.includes("lodging")) return "hotel";
+  if (category.includes("restaurant") || category.includes("food")) return "restaurant";
+  if (category.includes("mall") || category.includes("shopping")) return "mall";
+  if (placeType === "place" || placeType === "locality" || placeType === "region") return "city";
+  if (placeType === "neighborhood") return "neighborhood";
+  if (placeType === "address") return "address";
+  return "landmark";
+}
+
 function normalizeMapboxFeature(feature) {
   const [longitude, latitude] = feature.center || [];
   const contextLabel = Array.isArray(feature.context)
@@ -43,7 +69,10 @@ function normalizeMapboxFeature(feature) {
     label,
     shortLabel: feature.text || label,
     latitude: Number(latitude),
-    longitude: Number(longitude)
+    longitude: Number(longitude),
+    type: inferMapboxType(feature),
+    source: "mapbox",
+    providerScore: Math.round((feature.relevance || 0) * 100)
   };
 }
 
@@ -72,24 +101,34 @@ export async function geocodeLocation(query) {
       limit: '1'
     });
     const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'RoamKenya/1.0 (booking-app)'
+    
+    // Add User-Agent header (required by Nominatim) and 1.5s timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'RoamKenya/1.0 (booking-app)'
+        },
+        signal: controller.signal
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return {
+            label: data[0].display_name,
+            shortLabel: data[0].name || data[0].display_name.split(',')[0],
+            latitude: parseFloat(data[0].lat),
+            longitude: parseFloat(data[0].lon)
+          };
+        }
       }
-    });
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        return {
-          label: data[0].display_name,
-          shortLabel: data[0].name || data[0].display_name.split(',')[0],
-          latitude: parseFloat(data[0].lat),
-          longitude: parseFloat(data[0].lon)
-        };
-      }
+    } finally {
+      clearTimeout(timeoutId);
     }
   } catch (err) {
-    console.warn("Nominatim geocode fallback failed:", err);
+    console.warn("Nominatim geocode fallback failed or timed out:", err);
   }
 
   // 3. Fallback to Mapbox Geocoding API
@@ -113,8 +152,10 @@ export async function geocodeLocation(query) {
   return normalizeMapboxFeature(data.features[0]);
 }
 
-export async function searchKenyaLocations(query) {
+export async function searchKenyaLocations(query, options = {}) {
   if (!query?.trim() || query.trim().length < 3) return [];
+
+  const { signal, proximity, limit = 8 } = options;
   
   try {
     const params = new URLSearchParams({
@@ -123,16 +164,14 @@ export async function searchKenyaLocations(query) {
       bbox: KENYA_BBOX,
       country: "ke",
       language: "en",
-      limit: "8",
-      proximity: NAIROBI_PROXIMITY,
-      // Prioritize specific location types
-      types: "address,place,locality,neighborhood,region",
-      // Fuzzy matching for better results
+      limit: String(limit),
+      proximity: formatMapboxProximity(proximity),
+      types: MAPBOX_TYPES,
       fuzzyMatch: "true"
     });
     
     const url = `${MAPBOX_GEOCODING_URL}/${encodeURIComponent(query)}.json?${params.toString()}`;
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     
     if (!response.ok) {
       console.warn("Mapbox API error:", response.status);
@@ -155,6 +194,9 @@ export async function searchKenyaLocations(query) {
     
     return kenyaResults.map(normalizeMapboxFeature);
   } catch (error) {
+    if (error.name === 'AbortError') {
+      throw error; // Re-throw AbortError so calling code knows the request was cancelled
+    }
     console.error("Location search error:", error);
     return [];
   }
