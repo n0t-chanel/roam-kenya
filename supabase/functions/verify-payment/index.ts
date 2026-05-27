@@ -141,10 +141,12 @@ serve(async (req) => {
           booking_id: bookingId,
           user_id: userId,
           amount: paidAmount,
-          payment_method: `${transaction.channel || "paystack"}_${paymentStage}`,
+          payment_method: "paystack",
+          payment_stage: paymentStage,
           reference,
           status: "completed",
           paystack_response: verifyPayload,
+          provider_payload: verifyPayload,
           updated_at: new Date().toISOString()
         },
         { onConflict: "reference" }
@@ -168,6 +170,10 @@ serve(async (req) => {
       bookingUpdatePayload.payment_status = "reservation_paid";
       bookingUpdatePayload.price_amount = paidAmount;
     }
+
+    bookingUpdatePayload.payment_method = "paystack";
+    bookingUpdatePayload.payment_stage = paymentStage;
+    bookingUpdatePayload.payment_reference = reference;
 
     const { error: bookingUpdateError } = await supabaseAdmin
       .from("bookings")
@@ -204,4 +210,3 @@ serve(async (req) => {
     );
   }
 });
-

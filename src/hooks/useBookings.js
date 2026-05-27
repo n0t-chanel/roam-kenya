@@ -301,6 +301,61 @@ export function useBookings() {
 	    }
 	  }, [])
 
+	  const confirmCashPayment = useCallback(async (bookingId) => {
+	    try {
+	      setError(null)
+	      setLoading(true)
+
+	      const { data: booking, error: bookingError } = await supabase
+	        .from('bookings')
+	        .select('id, payment_stage, payment_status, payment_reference')
+	        .eq('id', bookingId)
+	        .single()
+
+	      if (bookingError) throw bookingError
+
+	      const { data: payment } = await supabase
+	        .from('payments')
+	        .select('id, reference, payment_stage')
+	        .eq('booking_id', bookingId)
+	        .eq('payment_method', 'cash')
+	        .order('created_at', { ascending: false })
+	        .limit(1)
+	        .maybeSingle()
+
+	      const stage = payment?.payment_stage || booking?.payment_stage || 'reservation'
+	      const nextPaymentStatus = stage === 'final' ? 'paid' : 'reservation_paid'
+
+	      if (payment?.id) {
+	        await supabase
+	          .from('payments')
+	          .update({ status: 'completed', paid_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+	          .eq('id', payment.id)
+	      }
+
+	      const { data: updatedBooking, error: updateError } = await supabase
+	        .from('bookings')
+	        .update({
+	          payment_status: nextPaymentStatus,
+	          payment_method: 'cash',
+	          payment_stage: stage,
+	          payment_reference: payment?.reference || booking.payment_reference,
+	          updated_at: new Date().toISOString()
+	        })
+	        .eq('id', bookingId)
+	        .select()
+	        .maybeSingle()
+
+	      if (updateError) throw updateError
+	      return updatedBooking
+	    } catch (err) {
+	      setError(err.message)
+	      throw err
+	    } finally {
+	      setLoading(false)
+	    }
+	  }, [])
+
   const subscribeToBookings = useCallback((callback) => {
     const channel = supabase
       .channel('bookings-realtime')
@@ -324,6 +379,7 @@ export function useBookings() {
 	    fetchBookings,
 	    updateBookingStatus,
 	    updateBookingQuote,
+	    confirmCashPayment,
 	    subscribeToBookings
 	  }
 }

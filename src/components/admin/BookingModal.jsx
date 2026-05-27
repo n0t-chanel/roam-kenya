@@ -4,7 +4,7 @@ import DriverAssignmentModal from './DriverAssignmentModal'
 import { useBookings, formatCurrency, formatDateTime, getBookingDateTimeValue, getFirstValue, getStatusBadgeClass, getStatusLabel } from '../../hooks/useBookings'
 
 export default function BookingModal({ booking, isOpen, onClose, onStatusChange, canAssignDriver = false }) {
-  const { updateBookingStatus, updateBookingQuote } = useBookings()
+  const { updateBookingStatus, updateBookingQuote, confirmCashPayment } = useBookings()
   const [actionLoading, setActionLoading] = useState(null)
   const [error, setError] = useState(null)
   const [assignmentOpen, setAssignmentOpen] = useState(false)
@@ -30,6 +30,8 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
   const finalPayment = formatCurrency(finalPaymentCents)
   const serviceLabel = getFirstValue(booking, ['service_category', 'service_type', 'serviceCategory', 'serviceType'], '')
   const paymentStatus = getFirstValue(booking, ['payment_status', 'paymentStatus'], '')
+  const paymentMethod = getFirstValue(booking, ['payment_method', 'paymentMethod'], '')
+  const paymentStage = getFirstValue(booking, ['payment_stage', 'paymentStage'], '')
   const isSafariQuote =
     serviceLabel.toString().toLowerCase().includes('safari') ||
     ['awaiting_quote', 'quote_ready'].includes(paymentStatus)
@@ -59,6 +61,20 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
       setError(err.message)
     } finally {
       setActionLoading(null)
+    }
+
+    const handleCashConfirmation = async () => {
+      if (!booking?.id) return
+      setError(null)
+      setActionLoading('cash')
+      try {
+        const updated = await confirmCashPayment(booking.id)
+        if (onStatusChange) onStatusChange({ ...booking, ...updated })
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setActionLoading(null)
+      }
     }
   }
 
@@ -156,6 +172,14 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
                 <span>Final Payment Due</span>
                 <span>{finalPayment}</span>
 	            </div>
+	              <div className="flex items-center justify-between">
+	                <span>Payment Method</span>
+	                <span>{paymentMethod || '—'}</span>
+	              </div>
+	              <div className="flex items-center justify-between">
+	                <span>Payment Stage</span>
+	                <span>{paymentStage || '—'}</span>
+	              </div>
 	          </div>
 
 	          {isSafariQuote && (
@@ -234,6 +258,16 @@ export default function BookingModal({ booking, isOpen, onClose, onStatusChange,
             >
               {actionLoading === 'completed' ? 'Updating...' : 'Mark as Completed'}
             </button>
+            {paymentMethod === 'cash' && ['reservation_pending', 'final_pending'].includes(paymentStatus) && (
+              <button
+                type="button"
+                onClick={handleCashConfirmation}
+                disabled={actionLoading === 'cash'}
+                className="rounded-md bg-[#B35A38] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {actionLoading === 'cash' ? 'Confirming...' : 'Confirm Cash Payment'}
+              </button>
+            )}
             <button
               type="button"
               onClick={confirmCancel}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, CreditCard, Navigation, Crosshair, Shield, Info, Truck } from "lucide-react";
+import { Calendar, Clock, MapPin, Users, Phone, ArrowLeft, AlertCircle, CheckCircle, Loader, Plane, Car, Hotel, Heart, Camera, CreditCard, Navigation, Crosshair, Shield, Info, Truck, Banknote } from "lucide-react";
 import BookingMap from "./BookingMap";
 import { useDatabase } from "../hooks/useDatabase";
 import { useAuthContext } from "../context/AuthContext";
@@ -19,6 +19,7 @@ import {
 } from "../lib/kenyaLocations";
 import { searchLocationsUnified } from "../lib/locationSearch";
 import { verifyPaymentServerSide } from "../lib/paymentVerification";
+import { initiateMpesaStkPush } from "../lib/mpesa";
 
 export default function ServiceBookingForm({ serviceType, onBack }) {
   const { user } = useAuthContext();
@@ -28,6 +29,18 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
   const [isPaying, setIsPaying] = useState(false);
   const [paymentFeedback, setPaymentFeedback] = useState(null);
   const [pickupGps, setPickupGps] = useState(null);
+  const paymentMethodOptions = [
+    { value: "paystack", label: "Paystack (Card/Bank)" },
+    { value: "mpesa", label: "M-Pesa (STK Push)" },
+    { value: "cash", label: "Cash (Pay Later)" }
+  ];
+  const paymentMethodIcons = {
+    paystack: CreditCard,
+    mpesa: Phone,
+    cash: Banknote
+  };
+  const [reservationPaymentMethod, setReservationPaymentMethod] = useState("paystack");
+  const [finalPaymentMethod, setFinalPaymentMethod] = useState("paystack");
 
     // Service icons mapping
   const serviceIcons = {
@@ -629,6 +642,8 @@ Thank you for booking with us!
 	        status: isQuoteOnlyService ? "Quote Pending" : "Active",
 	        flightNumber: bookingPayload.flight_number || null,
 	        paymentStatus: bookingPayload.payment_status,
+	        paymentMethod: bookingPayload.payment_method || null,
+	        paymentStage: bookingPayload.payment_stage || null,
 	        reservationAmount,
 	        totalPriceAmount: pricing?.totalPriceCents ?? null,
 	        finalPaymentAmount: pricing?.finalPaymentCents ?? null,
@@ -718,7 +733,7 @@ Thank you for booking with us!
     );
   };
 
-  const handleReserveBookingPayment = async () => {
+  const handleBookingPayment = async (stage) => {
     if (!activeBooking?.id || !user?.id) {
       setPaymentFeedback({
         type: "error",
@@ -727,11 +742,130 @@ Thank you for booking with us!
       return;
     }
 
+    const paymentStage = stage === "final" ? "final" : "reservation";
+    const amount =
+      paymentStage === "final" ? activeBooking.finalPaymentAmount : activeBooking.reservationAmount;
+    const selectedMethod =
+      paymentStage === "final" ? finalPaymentMethod : reservationPaymentMethod;
+
+    if (!amount || amount <= 0) {
+      setPaymentFeedback({
+        type: "error",
+        message: "Payment amount is missing for this booking."
+      });
+      return;
+    }
+
+    if (selectedMethod === "mpesa" && !phoneNumber) {
+      setPaymentFeedback({
+        type: "error",
+        message: "Add a valid phone number to complete M-Pesa payment."
+      });
+      return;
+    }
+
     setIsPaying(true);
     setPaymentFeedback(null);
 
+    if (selectedMethod === "cash") {
+      const reference = `cash_${createPaymentReference(activeBooking.id)}`;
+      try {
+        const { error: insertError } = await supabase
+          .from("payments")
+          .insert({
+            booking_id: activeBooking.id,
+            user_id: user.id,
+            amount,
+            payment_method: "cash",
+            payment_stage: paymentStage,
+            reference,
+            status: "pending",
+            provider_payload: null
+          });
+
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
+
+        await supabase
+          .from("bookings")
+          .update({
+            payment_status: paymentStage === "final" ? "final_pending" : "reservation_pending",
+            payment_method: "cash",
+            payment_stage: paymentStage,
+            payment_reference: reference,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", activeBooking.id)
+          .eq("user_id", user.id);
+
+        setActiveBooking((prev) =>
+          prev
+            ? {
+                ...prev,
+                paymentStatus: paymentStage === "final" ? "final_pending" : "reservation_pending",
+                paymentMethod: "cash",
+                paymentStage: paymentStage,
+                paymentReference: reference
+              }
+            : prev
+        );
+
+        setPaymentFeedback({
+          type: "success",
+          message: "Cash payment recorded. An admin will confirm once payment is received."
+        });
+      } catch (err) {
+        setPaymentFeedback({
+          type: "error",
+          message: err.message
+        });
+      } finally {
+        setIsPaying(false);
+      }
+      return;
+    }
+
+    if (selectedMethod === "mpesa") {
+      try {
+        const response = await initiateMpesaStkPush(supabase, {
+          bookingId: activeBooking.id,
+          amount,
+          phone: phoneNumber,
+          paymentStage
+        });
+
+        if (!response?.success) {
+          throw new Error(response?.error || "Failed to initiate M-Pesa payment.");
+        }
+
+        setActiveBooking((prev) =>
+          prev
+            ? {
+                ...prev,
+                paymentStatus: paymentStage === "final" ? "final_pending" : "reservation_pending",
+                paymentMethod: "mpesa",
+                paymentStage,
+                paymentReference: response.reference || prev.paymentReference
+              }
+            : prev
+        );
+        setPaymentFeedback({
+          type: "success",
+          message: response.message || "M-Pesa STK push initiated. Complete the prompt on your phone."
+        });
+      } catch (err) {
+        setPaymentFeedback({
+          type: "error",
+          message: err.message
+        });
+      } finally {
+        setIsPaying(false);
+      }
+      return;
+    }
+
     const reference = createPaymentReference(activeBooking.id);
-    const amount = activeBooking.reservationAmount;
 
     try {
       const { error: insertError } = await supabase
@@ -741,6 +875,7 @@ Thank you for booking with us!
           user_id: user.id,
           amount,
           payment_method: "paystack",
+          payment_stage: paymentStage,
           reference,
           status: "pending",
           paystack_response: null
@@ -761,7 +896,8 @@ Thank you for booking with us!
         metadata: {
           bookingId: activeBooking.id,
           userId: user.id,
-          service: activeBooking.service
+          service: activeBooking.service,
+          paymentStage
         },
         onSuccess: async (transaction) => {
           try {
@@ -769,7 +905,7 @@ Thank you for booking with us!
               reference,
               bookingId: activeBooking.id,
               expectedAmount: amount,
-              paymentStage: "reservation",
+              paymentStage,
               checkoutResponse: transaction
             });
 
@@ -781,7 +917,9 @@ Thank you for booking with us!
               prev
                 ? {
                     ...prev,
-                    paymentStatus: "reservation_paid",
+                    paymentStatus: paymentStage === "final" ? "paid" : "reservation_paid",
+                    paymentMethod: "paystack",
+                    paymentStage,
                     paymentReference: reference
                   }
                 : prev
@@ -790,27 +928,29 @@ Thank you for booking with us!
               type: "success",
               message:
                 verifyResult?.message ||
-                `Payment verified successfully. Reference: ${reference}. You can cancel this reservation within 24 hours.`
+                `Payment verified successfully. Reference: ${reference}.`
             });
 
-            try {
-              await sendBookingEmail({
-                bookingId: activeBooking.id,
-                userEmail: user.email,
-                userName: user.user_metadata?.full_name || user.email,
-                pickupLocation: activeBooking.pickupLocation,
-                destinationLocation: activeBooking.destinationLocation,
-                pickupDate: activeBooking.date,
-                pickupTime: activeBooking.time,
-                passengers: activeBooking.passengers,
-                vehicleType: activeBooking.vehicleType,
-                flightNumber: activeBooking.flightNumber || undefined,
-                serviceType: `${activeBooking.service} (Reserved & Paid)`,
-                reservationNotice:
-                  "Reservation confirmed. You can cancel your reservation within 24 hours from payment time."
-              });
-            } catch (emailErr) {
-              console.error("Reservation email sending error:", emailErr);
+            if (paymentStage === "reservation") {
+              try {
+                await sendBookingEmail({
+                  bookingId: activeBooking.id,
+                  userEmail: user.email,
+                  userName: user.user_metadata?.full_name || user.email,
+                  pickupLocation: activeBooking.pickupLocation,
+                  destinationLocation: activeBooking.destinationLocation,
+                  pickupDate: activeBooking.date,
+                  pickupTime: activeBooking.time,
+                  passengers: activeBooking.passengers,
+                  vehicleType: activeBooking.vehicleType,
+                  flightNumber: activeBooking.flightNumber || undefined,
+                  serviceType: `${activeBooking.service} (Reserved & Paid)`,
+                  reservationNotice:
+                    "Reservation confirmed. You can cancel your reservation within 24 hours from payment time."
+                });
+              } catch (emailErr) {
+                console.error("Reservation email sending error:", emailErr);
+              }
             }
           } catch (verifyErr) {
             await supabase
@@ -863,6 +1003,13 @@ Thank you for booking with us!
     resolvedLocationFields.dropoffField && resolvedLocationFields.dropoffField !== resolvedLocationFields.pickupField
       ? locationCoords[resolvedLocationFields.dropoffField]
       : null;
+  const paymentStatusValue = activeBooking?.paymentStatus || "unpaid";
+  const paymentStatusIsPaid = ["reservation_paid", "paid"].includes(paymentStatusValue);
+  const reservationPaymentDisabled =
+    isPaying ||
+    ["reservation_paid", "paid", "reservation_pending"].includes(paymentStatusValue);
+  const finalPaymentReady = ["reservation_paid", "final_pending"].includes(paymentStatusValue);
+  const finalPaymentDisabled = isPaying || paymentStatusValue === "paid" || !finalPaymentReady;
 
   return (
     <div className="min-h-screen bg-[#FAFAFA] pt-24 sm:pt-28 pb-14 sm:pb-20">
@@ -1385,12 +1532,24 @@ Thank you for booking with us!
                   <p className="text-gray-600">Payment Status</p>
                   <span
                     className={`px-3 py-1 text-xs font-semibold border uppercase ${
-                      activeBooking?.paymentStatus === "paid" || activeBooking?.paymentStatus === "reservation_paid"
+                      paymentStatusIsPaid
                         ? "bg-green-100 text-green-700 border-green-300"
                         : "bg-yellow-100 text-yellow-700 border-yellow-300"
                     }`}
                   >
-                    {activeBooking?.paymentStatus || "unpaid"}
+                    {paymentStatusValue}
+                  </span>
+                </div>
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2">
+                  <p className="text-gray-600">Payment Method</p>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {activeBooking?.paymentMethod || "Not selected"}
+                  </span>
+                </div>
+                <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-2">
+                  <p className="text-gray-600">Payment Stage</p>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {activeBooking?.paymentStage || "reservation"}
                   </span>
                 </div>
                 {activeBooking?.paymentReference && (
@@ -1413,14 +1572,63 @@ Thank you for booking with us!
                 </div>
               )}
 
+	              <div className="mt-4 space-y-2">
+	                <label className="text-xs font-semibold text-gray-500">Reservation payment method</label>
+	                <div className="grid gap-2 sm:grid-cols-3">
+	                  {paymentMethodOptions.map((method) => {
+	                    const Icon = paymentMethodIcons[method.value] || CreditCard;
+	                    const isSelected = reservationPaymentMethod === method.value;
+	                    return (
+	                      <button
+	                        key={`reservation-${method.value}`}
+	                        type="button"
+	                        onClick={() => setReservationPaymentMethod(method.value)}
+	                        aria-pressed={isSelected}
+	                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
+	                          isSelected
+	                            ? "border-[#C5A059] bg-[#C5A059]/10 text-[#1A1A1A]"
+	                            : "border-gray-300 bg-white text-gray-700 hover:border-[#1A1A1A]"
+	                        }`}
+	                      >
+	                        <Icon size={16} />
+	                        <span>{method.label}</span>
+	                      </button>
+	                    );
+	                  })}
+	                </div>
+	              </div>
+
+	              {(reservationPaymentMethod === "mpesa" || finalPaymentMethod === "mpesa") && (
+	                <div className="mt-3 space-y-2">
+	                  <label className="text-xs font-semibold text-gray-500">M-Pesa phone number</label>
+	                  <input
+	                    type="tel"
+	                    value={phoneNumber}
+	                    onChange={(event) => {
+	                      setPhoneNumber(event.target.value);
+	                      if (formErrors.phone) {
+	                        setFormErrors((prev) => ({ ...prev, phone: null }));
+	                      }
+	                    }}
+	                    placeholder="e.g., 07XXXXXXXX or 2547XXXXXXXX"
+	                    className={`w-full rounded-lg border px-3 py-2 text-sm ${
+	                      formErrors.phone ? "border-red-500 bg-red-50" : "border-gray-300"
+	                    }`}
+	                  />
+	                  <p className="text-[11px] text-gray-500">
+	                    This number receives the STK prompt for payment.
+	                  </p>
+	                </div>
+	              )}
+
 	              <button
 	                type="button"
-	                disabled={activeBooking?.quoteOnly || isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
-	                onClick={handleReserveBookingPayment}
-                className="mt-5 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg px-6 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_10px_24px_rgba(197,160,89,0.18)]"
-              >
-                {isPaying ? <Loader size={18} className="animate-spin" /> : <CreditCard size={18} />}
-	                {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
+	                disabled={activeBooking?.quoteOnly || reservationPaymentDisabled}
+	                onClick={() => handleBookingPayment("reservation")}
+	                className="mt-5 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg px-6 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_10px_24px_rgba(197,160,89,0.18)]"
+	              >
+	                {isPaying ? <Loader size={18} className="animate-spin" /> : <CreditCard size={18} />}
+	                {paymentStatusValue === "reservation_paid" || paymentStatusValue === "paid"
 	                  ? "Reservation Paid"
 	                  : "Pay 30% Reservation"}
 	              </button>
@@ -1438,17 +1646,40 @@ Thank you for booking with us!
                 View My Bookings
               </a>
 	              {!activeBooking?.quoteOnly && (
-	                <button
-	                  type="button"
-	                  disabled={isPaying || activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"}
-	                  onClick={handleReserveBookingPayment}
-	                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#C5A059] hover:border-[#1A1A1A] hover:bg-[#1A1A1A] text-[#C5A059] hover:text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-	                >
-	                  {isPaying ? <Loader size={16} className="animate-spin" /> : <CreditCard size={16} />}
-	                  {activeBooking?.paymentStatus === "reservation_paid" || activeBooking?.paymentStatus === "paid"
-	                    ? "Payment Complete"
-	                    : "Complete Payment"}
-	                </button>
+	                <div className="flex-1 space-y-2">
+	                  <label className="text-xs font-semibold text-gray-500">Final payment method</label>
+	                  <div className="grid gap-2 sm:grid-cols-3">
+	                    {paymentMethodOptions.map((method) => {
+	                      const Icon = paymentMethodIcons[method.value] || CreditCard;
+	                      const isSelected = finalPaymentMethod === method.value;
+	                      return (
+	                        <button
+	                          key={`final-${method.value}`}
+	                          type="button"
+	                          onClick={() => setFinalPaymentMethod(method.value)}
+	                          aria-pressed={isSelected}
+	                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
+	                            isSelected
+	                              ? "border-[#C5A059] bg-[#C5A059]/10 text-[#1A1A1A]"
+	                              : "border-gray-300 bg-white text-gray-700 hover:border-[#1A1A1A]"
+	                          }`}
+	                        >
+	                          <Icon size={16} />
+	                          <span>{method.label}</span>
+	                        </button>
+	                      );
+	                    })}
+	                  </div>
+	                  <button
+	                    type="button"
+	                    disabled={finalPaymentDisabled}
+	                    onClick={() => handleBookingPayment("final")}
+	                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#C5A059] hover:border-[#1A1A1A] hover:bg-[#1A1A1A] text-[#C5A059] hover:text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+	                  >
+	                    {isPaying ? <Loader size={16} className="animate-spin" /> : <CreditCard size={16} />}
+	                    {paymentStatusValue === "paid" ? "Payment Complete" : "Complete Payment"}
+	                  </button>
+	                </div>
 	              )}
             </div>
 
