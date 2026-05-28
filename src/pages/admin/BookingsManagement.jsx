@@ -38,6 +38,13 @@ const resolveCustomerEmail = (booking) =>
 const resolveVehicle = (booking) =>
   getFirstValue(booking, ['vehicle_type', 'vehicleType'], '—')
 
+const resolvePaymentSummary = (booking) => {
+  const method = getFirstValue(booking, ['payment_method', 'paymentMethod'], '—')
+  const status = getFirstValue(booking, ['payment_status', 'paymentStatus'], '—')
+  const stage = getFirstValue(booking, ['payment_stage', 'paymentStage'], '—')
+  return { method, status, stage }
+}
+
 const resolveBookingId = (booking) => (booking?.id ? `#${booking.id.slice(0, 6).toUpperCase()}` : '—')
 
 const getSortValue = (booking, key) => {
@@ -343,19 +350,20 @@ export default function BookingsManagement() {
                       Vehicle
                     </button>
                   </th>
+                  <th className="px-4 py-3 text-left">Payment</th>
                   <th className="px-4 py-3 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="8" className="px-4 py-6 text-center text-gray-500">
+                    <td colSpan="9" className="px-4 py-6 text-center text-gray-500">
                       Loading bookings...
                     </td>
                   </tr>
                 ) : sortedBookings.length === 0 ? (
                   <tr>
-                    <td colSpan="8" className="px-4 py-6 text-center text-gray-400">
+                    <td colSpan="9" className="px-4 py-6 text-center text-gray-400">
                       No bookings found.
                     </td>
                   </tr>
@@ -363,6 +371,7 @@ export default function BookingsManagement() {
                   sortedBookings.map((booking) => {
                     const statusClass = getStatusBadgeClass(booking.status)
                     const statusLabel = getStatusLabel(booking.status)
+                    const paymentSummary = resolvePaymentSummary(booking)
                     return (
                       <tr key={booking.id} className="border-t border-gray-100">
                         <td className="px-4 py-3">
@@ -390,6 +399,11 @@ export default function BookingsManagement() {
                           </span>
                         </td>
                         <td className="px-4 py-3 text-gray-700">{resolveVehicle(booking)}</td>
+                        <td className="px-4 py-3 text-xs text-gray-700">
+                          <div className="font-semibold">{paymentSummary.method}</div>
+                          <div className="text-gray-500">{paymentSummary.status}</div>
+                          <div className="text-gray-400">{paymentSummary.stage}</div>
+                        </td>
                         <td className="px-4 py-3">
                           <button
                             type="button"
