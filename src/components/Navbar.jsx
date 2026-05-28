@@ -86,6 +86,7 @@ export default function Navbar() {
               </div>
 
               <Link to="/destinations" className={getLinkClass("/destinations")}>Destinations</Link>
+              {user && <Link to="/bookings" className={getLinkClass("/bookings")}>My Bookings</Link>}
             </div>
 
             <div className="flex items-center gap-4 border-l border-gray-600/50 pl-8">
@@ -136,6 +137,11 @@ export default function Navbar() {
           ))}
           <div className="w-12 h-[1px] my-2 bg-white/10" />
           <Link to="/destinations" className="text-2xl font-serif text-white hover:text-[#C5A059] transition-colors">Destinations</Link>
+          {user && (
+            <Link to="/bookings" className="text-2xl font-serif text-white hover:text-[#C5A059] transition-colors">
+              My Bookings
+            </Link>
+          )}
           
           <div className="flex flex-col gap-4 mt-8 w-full max-w-[250px]">
             <button 

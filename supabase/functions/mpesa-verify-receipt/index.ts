@@ -8,18 +8,19 @@ const corsHeaders = {
   "Content-Type": "application/json"
 };
 
-const normalizePhone = (phone: string) => {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("254")) return digits;
-  if (digits.startsWith("0")) return `254${digits.slice(1)}`;
-  return digits;
-};
-
 const resolveMpesaBaseUrl = () => {
   const env = (Deno.env.get("MPESA_ENV") || "sandbox").toLowerCase();
   return env === "production"
     ? "https://api.safaricom.co.ke"
     : "https://sandbox.safaricom.co.ke";
+};
+
+const getTimestamp = () => {
+  const now = new Date();
+  const pad = (value: number) => value.toString().padStart(2, "0");
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(
+    now.getMinutes()
+  )}${pad(now.getSeconds())}`;
 };
 
 const getMpesaAccessToken = async (baseUrl: string, consumerKey: string, consumerSecret: string) => {
@@ -37,14 +38,6 @@ const getMpesaAccessToken = async (baseUrl: string, consumerKey: string, consume
   }
 
   return payload.access_token as string;
-};
-
-const getTimestamp = () => {
-  const now = new Date();
-  const pad = (value: number) => value.toString().padStart(2, "0");
-  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(
-    now.getMinutes()
-  )}${pad(now.getSeconds())}`;
 };
 
 serve(async (req) => {
@@ -67,7 +60,6 @@ serve(async (req) => {
     const consumerSecret = Deno.env.get("MPESA_CONSUMER_SECRET");
     const passkey = Deno.env.get("MPESA_PASSKEY");
     const shortcode = Deno.env.get("MPESA_SHORTCODE");
-    const callbackUrl = Deno.env.get("MPESA_CALLBACK_URL");
 
     if (!supabaseUrl || !serviceRoleKey) {
       return new Response(JSON.stringify({ success: false, error: "Missing Supabase credentials." }), {
@@ -76,12 +68,11 @@ serve(async (req) => {
       });
     }
 
-    if (!consumerKey || !consumerSecret || !passkey || !shortcode || !callbackUrl) {
+    if (!consumerKey || !consumerSecret || !passkey || !shortcode) {
       return new Response(
         JSON.stringify({
           success: false,
-          error:
-            "Missing MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, MPESA_SHORTCODE, or MPESA_CALLBACK_URL."
+          error: "Missing MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_PASSKEY, or MPESA_SHORTCODE."
         }),
         { status: 500, headers: corsHeaders }
       );
@@ -108,27 +99,19 @@ serve(async (req) => {
     const userId = userData.user.id;
     const body = await req.json();
     const bookingId = String(body?.bookingId || "").trim();
-    const amount = Number(body?.amount || 0);
-    const rawPhone = String(body?.phone || "").trim();
-    const paymentStage = String(body?.paymentStage || "reservation").trim();
+    const receipt = String(body?.receipt || "").trim();
+    const requestedStage = String(body?.paymentStage || "").trim();
 
-    if (!bookingId || !rawPhone || !Number.isFinite(amount) || amount <= 0) {
+    if (!bookingId || !receipt) {
       return new Response(
-        JSON.stringify({ success: false, error: "bookingId, phone, and amount are required." }),
+        JSON.stringify({ success: false, error: "bookingId and receipt are required." }),
         { status: 400, headers: corsHeaders }
       );
     }
 
-    if (!["reservation", "final"].includes(paymentStage)) {
-      return new Response(JSON.stringify({ success: false, error: "Invalid payment stage." }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
     const { data: booking, error: bookingError } = await admin
       .from("bookings")
-      .select("id, user_id, price_amount, total_price")
+      .select("id, user_id")
       .eq("id", bookingId)
       .eq("user_id", userId)
       .maybeSingle();
@@ -140,26 +123,31 @@ serve(async (req) => {
       });
     }
 
-    const normalizedPhone = normalizePhone(rawPhone);
-    const reference = `mpesa_${bookingId.replace(/-/g, "").slice(0, 10)}_${Date.now()}`;
+    let paymentQuery = admin
+      .from("payments")
+      .select("id, payment_stage, payment_method, checkout_request_id, status")
+      .eq("booking_id", bookingId)
+      .eq("payment_method", "mpesa")
+      .order("created_at", { ascending: false })
+      .limit(1);
 
-    const { error: insertError } = await admin.from("payments").insert({
-      booking_id: bookingId,
-      user_id: userId,
-      amount,
-      payment_method: "mpesa",
-      payment_stage: paymentStage,
-      reference,
-      status: "pending",
-      phone: normalizedPhone,
-      provider_payload: null
-    });
+    if (requestedStage) {
+      paymentQuery = paymentQuery.eq("payment_stage", requestedStage);
+    }
 
-    if (insertError) {
-      return new Response(JSON.stringify({ success: false, error: insertError.message }), {
-        status: 500,
+    const { data: payment, error: paymentError } = await paymentQuery.maybeSingle();
+    if (paymentError || !payment) {
+      return new Response(JSON.stringify({ success: false, error: "M-Pesa payment record not found." }), {
+        status: 404,
         headers: corsHeaders
       });
+    }
+
+    if (!payment.checkout_request_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing checkout request id for verification." }),
+        { status: 400, headers: corsHeaders }
+      );
     }
 
     const baseUrl = resolveMpesaBaseUrl();
@@ -167,7 +155,7 @@ serve(async (req) => {
     const timestamp = getTimestamp();
     const password = btoa(`${shortcode}${passkey}${timestamp}`);
 
-    const stkResponse = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
+    const stkResponse = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -177,71 +165,77 @@ serve(async (req) => {
         BusinessShortCode: shortcode,
         Password: password,
         Timestamp: timestamp,
-        TransactionType: "CustomerPayBillOnline",
-        Amount: Math.round(amount / 100),
-        PartyA: normalizedPhone,
-        PartyB: shortcode,
-        PhoneNumber: normalizedPhone,
-        CallBackURL: callbackUrl,
-        AccountReference: reference,
-        TransactionDesc: `Roam Kenya ${paymentStage} payment`
+        CheckoutRequestID: payment.checkout_request_id
       })
     });
 
     const stkPayload = await stkResponse.json().catch(() => null);
-    if (!stkResponse.ok || !stkPayload?.CheckoutRequestID) {
-      console.error("M-Pesa STK error", {
-        status: stkResponse.status,
-        payload: stkPayload
-      });
-      await admin
-        .from("payments")
-        .update({
-          status: "failed",
-          provider_payload: stkPayload,
-          updated_at: new Date().toISOString()
-        })
-        .eq("reference", reference);
-
+    if (!stkResponse.ok) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: stkPayload?.errorMessage || stkPayload?.errorMessage || stkPayload?.error || "M-Pesa request failed."
+          error: stkPayload?.errorMessage || stkPayload?.error || "Failed to query M-Pesa status."
         }),
         { status: 500, headers: corsHeaders }
       );
     }
 
-    const { CheckoutRequestID, MerchantRequestID } = stkPayload;
-    await admin
+    if (stkPayload?.ResultCode !== "0" && stkPayload?.ResultCode !== 0) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: stkPayload?.ResultDesc || "M-Pesa payment not confirmed yet.",
+          status: stkPayload?.ResultCode
+        }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const stage = payment.payment_stage || requestedStage || "reservation";
+    const { error: paymentUpdateError } = await admin
       .from("payments")
       .update({
-        checkout_request_id: CheckoutRequestID,
-        merchant_request_id: MerchantRequestID,
+        status: "completed",
+        provider_reference: receipt,
+        paid_at: new Date().toISOString(),
         provider_payload: stkPayload,
         updated_at: new Date().toISOString()
       })
-      .eq("reference", reference);
+      .eq("id", payment.id);
 
-    await admin
+    if (paymentUpdateError) {
+      return new Response(JSON.stringify({ success: false, error: paymentUpdateError.message }), {
+        status: 500,
+        headers: corsHeaders
+      });
+    }
+
+    const bookingUpdate = {
+      payment_status: stage === "final" ? "paid" : "reservation_paid",
+      payment_method: "mpesa",
+      payment_stage: stage,
+      payment_reference: receipt,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error: bookingUpdateError } = await admin
       .from("bookings")
-      .update({
-        payment_status: paymentStage === "final" ? "final_pending" : "reservation_pending",
-        payment_method: "mpesa",
-        payment_stage: paymentStage,
-        payment_reference: reference,
-        updated_at: new Date().toISOString()
-      })
+      .update(bookingUpdate)
       .eq("id", bookingId)
       .eq("user_id", userId);
+
+    if (bookingUpdateError) {
+      return new Response(JSON.stringify({ success: false, error: bookingUpdateError.message }), {
+        status: 500,
+        headers: corsHeaders
+      });
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: "M-Pesa STK push initiated. Complete the prompt on your phone.",
-        reference,
-        checkoutRequestId: CheckoutRequestID,
-        merchantRequestId: MerchantRequestID
+        message: "Payment confirmed.",
+        receipt
       }),
       { status: 200, headers: corsHeaders }
     );
@@ -249,7 +243,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: err instanceof Error ? err.message : "Unexpected M-Pesa initiation error."
+        error: err instanceof Error ? err.message : "Unexpected M-Pesa verification error."
       }),
       { status: 500, headers: corsHeaders }
     );

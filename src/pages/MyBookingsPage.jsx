@@ -9,6 +9,7 @@ import {
   startPaystackCheckout
 } from "../lib/paystack";
 import { verifyPaymentServerSide } from "../lib/paymentVerification";
+import { initiateMpesaStkPush, verifyMpesaReceipt } from "../lib/mpesa";
 import { sendBookingEmail } from "../lib/emailService";
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,6 +44,10 @@ export default function MyBookingsPage() {
 	  const [processingReservationBookingId, setProcessingReservationBookingId] = useState(null);
 	  const [processingFinalPaymentBookingId, setProcessingFinalPaymentBookingId] = useState(null);
   const [retryingVerificationBookingId, setRetryingVerificationBookingId] = useState(null);
+	  const [mpesaReceiptInputs, setMpesaReceiptInputs] = useState({});
+	  const [mpesaReceiptBookingId, setMpesaReceiptBookingId] = useState(null);
+	  const [finalPaymentMethods, setFinalPaymentMethods] = useState({});
+	  const [finalMpesaPhones, setFinalMpesaPhones] = useState({});
   const [editForm, setEditForm] = useState({
     pickup_location: "",
     destination_location: "",
@@ -192,6 +197,60 @@ export default function MyBookingsPage() {
     } catch (err) {
       setActionMessage({ type: "error", message: `Unable to update booking: ${err.message}` });
       setSavingBookingId(null);
+    }
+  };
+
+  const confirmMpesaReceipt = async (booking) => {
+    const receipt = (mpesaReceiptInputs[booking.id] || "").trim();
+    if (!receipt) {
+      setActionMessage({
+        type: "error",
+        message: "Please enter the M-Pesa receipt code from your SMS to confirm payment."
+      });
+      return;
+    }
+
+    setMpesaReceiptBookingId(booking.id);
+    setActionMessage(null);
+    try {
+      const stage = booking.payment_stage || "reservation";
+      const response = await verifyMpesaReceipt(supabase, {
+        bookingId: booking.id,
+        receipt,
+        paymentStage: stage
+      });
+
+      if (!response?.success) {
+        throw new Error(response?.error || "M-Pesa receipt verification failed.");
+      }
+
+      const paymentStatus = stage === "final" ? "paid" : "reservation_paid";
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === booking.id
+            ? {
+                ...b,
+                payment_status: paymentStatus,
+                payment_method: "mpesa",
+                payment_stage: stage,
+                payment_reference: receipt
+              }
+            : b
+        )
+      );
+      setActionMessage({
+        type: "success",
+        message: `Payment confirmed. M-Pesa receipt: ${receipt}.`
+      });
+      setMpesaReceiptInputs((prev) => ({ ...prev, [booking.id]: "" }));
+    } catch (err) {
+      setActionMessage({
+        type: "error",
+        message:
+          "We couldn't find that receipt. Please check the code and try again, or retry the payment."
+      });
+    } finally {
+      setMpesaReceiptBookingId(null);
     }
   };
 
@@ -410,7 +469,7 @@ export default function MyBookingsPage() {
 	    }
 	  };
 
-	  const processFinalPayment = async (booking) => {
+	  const processFinalPayment = async (booking, method = "paystack") => {
     const totalPrice = Number(booking.total_price || 0);
     const reservationFee = Number(booking.price_amount || 0);
     const balanceDue = Math.max(totalPrice - reservationFee, 0);
@@ -423,17 +482,62 @@ export default function MyBookingsPage() {
     setProcessingFinalPaymentBookingId(booking.id);
     setActionMessage(null);
 
-    const reference = createPaymentReference(`${booking.id}_final`);
-    try {
-      const { error: insertError } = await supabase.from("payments").insert({
-        booking_id: booking.id,
-        user_id: user.id,
-        amount: balanceDue,
-        payment_method: "paystack_final",
-        reference,
-        status: "pending",
-        paystack_response: null
-      });
+	    if (method === "mpesa") {
+	      const phone = (finalMpesaPhones[booking.id] || "").trim();
+	      if (!phone) {
+	        setActionMessage({ type: "error", message: "Enter the M-Pesa phone number to continue." });
+	        setProcessingFinalPaymentBookingId(null);
+	        return;
+	      }
+
+	      try {
+	        const response = await initiateMpesaStkPush(supabase, {
+	          bookingId: booking.id,
+	          amount: balanceDue,
+	          phone,
+	          paymentStage: "final"
+	        });
+
+	        if (!response?.success) {
+	          throw new Error(response?.error || "Failed to initiate M-Pesa payment.");
+	        }
+
+	        setBookings((prev) =>
+	          prev.map((b) =>
+	            b.id === booking.id
+	              ? {
+	                  ...b,
+	                  payment_status: "final_pending",
+	                  payment_method: "mpesa",
+	                  payment_stage: "final",
+	                  payment_reference: response.reference || b.payment_reference
+	                }
+	              : b
+	          )
+	        );
+	        setActionMessage({
+	          type: "success",
+	          message: "M-Pesa prompt sent. Complete the payment on your phone."
+	        });
+	      } catch (err) {
+	        setActionMessage({ type: "error", message: `Unable to start M-Pesa payment: ${err.message}` });
+	      } finally {
+	        setProcessingFinalPaymentBookingId(null);
+	      }
+	      return;
+	    }
+
+	    const reference = createPaymentReference(`${booking.id}_final`);
+	    try {
+	      const { error: insertError } = await supabase.from("payments").insert({
+	        booking_id: booking.id,
+	        user_id: user.id,
+	        amount: balanceDue,
+	        payment_method: "paystack",
+	        reference,
+	        status: "pending",
+	        paystack_response: null
+	      });
 
       if (insertError) throw insertError;
 
@@ -789,19 +893,48 @@ export default function MyBookingsPage() {
                         </button>
                       )}
 	                      {booking.payment_status === "reservation_paid" && booking.status !== "cancelled" && (
-	                        <button
-                          type="button"
-                          disabled={processingFinalPaymentBookingId === booking.id}
-                          onClick={() => processFinalPayment(booking)}
-                          className="inline-flex items-center gap-2 px-4 py-2 border border-green-500 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
-                        >
-                          {processingFinalPaymentBookingId === booking.id ? (
-                            <Loader size={14} className="animate-spin" />
-                          ) : (
-                            <Car size={14} />
-                          )}
-	                          Confirm Trip & Pay Balance
-	                        </button>
+	                        <div className="flex flex-wrap items-center gap-2 w-full">
+	                          <select
+	                            value={finalPaymentMethods[booking.id] || "paystack"}
+	                            onChange={(event) =>
+	                              setFinalPaymentMethods((prev) => ({
+	                                ...prev,
+	                                [booking.id]: event.target.value
+	                              }))
+	                            }
+	                            className="border border-gray-300 px-3 py-2 text-sm"
+	                          >
+	                            <option value="paystack">Paystack (Card/Bank)</option>
+	                            <option value="mpesa">M-Pesa (STK Push)</option>
+	                          </select>
+	                          {finalPaymentMethods[booking.id] === "mpesa" && (
+	                            <input
+	                              type="tel"
+	                              value={finalMpesaPhones[booking.id] || ""}
+	                              onChange={(event) =>
+	                                setFinalMpesaPhones((prev) => ({
+	                                  ...prev,
+	                                  [booking.id]: event.target.value
+	                                }))
+	                              }
+	                              placeholder="M-Pesa phone number"
+	                              className="border border-gray-300 px-3 py-2 text-sm min-w-[200px] flex-1"
+	                            />
+	                          )}
+	                          <button
+	                            type="button"
+	                            disabled={processingFinalPaymentBookingId === booking.id}
+	                            onClick={() => processFinalPayment(booking, finalPaymentMethods[booking.id] || "paystack")}
+	                            className="inline-flex items-center gap-2 px-4 py-2 border border-green-500 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+	                          >
+	                            {processingFinalPaymentBookingId === booking.id ? (
+	                              <Loader size={14} className="animate-spin" />
+	                            ) : (
+	                              <Car size={14} />
+	                            )}
+	                            Confirm Trip & Pay Balance
+	                          </button>
+	                        </div>
 	                      )}
 	                      {booking.payment_status === "quote_ready" &&
 	                        booking.status !== "cancelled" &&
@@ -839,6 +972,55 @@ export default function MyBookingsPage() {
                           )}
                           Retry Verification
                         </button>
+                      )}
+                      {booking.payment_method === "mpesa" &&
+                        ["reservation_pending", "final_pending"].includes(booking.payment_status) && (
+                        <div className="w-full border border-gray-200 bg-gray-50 p-3">
+                          <p className="text-xs font-semibold text-gray-700">
+                            Enter your M-Pesa receipt code to confirm instantly.
+                          </p>
+                          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                            <input
+                              type="text"
+                              value={mpesaReceiptInputs[booking.id] || ""}
+                              onChange={(event) =>
+                                setMpesaReceiptInputs((prev) => ({
+                                  ...prev,
+                                  [booking.id]: event.target.value
+                                }))
+                              }
+                              placeholder="e.g., QAY6F3P9XY"
+                              className="flex-1 border border-gray-300 px-3 py-2 text-sm"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => confirmMpesaReceipt(booking)}
+                              disabled={mpesaReceiptBookingId === booking.id}
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-[#1A1A1A] text-white text-sm font-semibold hover:opacity-90 disabled:opacity-60"
+                            >
+                              {mpesaReceiptBookingId === booking.id ? (
+                                <Loader size={14} className="animate-spin" />
+                              ) : null}
+                              Confirm Receipt
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => startReservationPayment(booking)}
+                              disabled={processingReservationBookingId === booking.id}
+                              className="inline-flex items-center gap-2 px-4 py-2 border border-[#B35A38] text-sm font-semibold text-[#B35A38] hover:bg-[#B35A38]/10 disabled:opacity-50"
+                            >
+                              {processingReservationBookingId === booking.id ? (
+                                <Loader size={14} className="animate-spin" />
+                              ) : (
+                                <RotateCcw size={14} />
+                              )}
+                              Retry payment
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-gray-500 mt-2">
+                            If you have not paid yet, you can retry payment.
+                          </p>
+                        </div>
                       )}
                       {booking.payment_status === "reservation_paid" &&
                         booking.status !== "cancelled" && (
@@ -882,4 +1064,3 @@ export default function MyBookingsPage() {
     </div>
   );
 }
-
