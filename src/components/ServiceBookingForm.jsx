@@ -34,6 +34,7 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
     { value: "mpesa", label: "M-Pesa (STK Push)" },
     { value: "cash", label: "Cash (Pay Later)" }
   ];
+  const mpesaIconSrc = "/assets/icons8-mpesa%20(1).svg";
   const paymentMethodIcons = {
     paystack: CreditCard,
     mpesa: Phone,
@@ -1870,6 +1871,7 @@ Thank you for booking with us!
 	                <div className="grid gap-2 sm:grid-cols-3">
 	                  {paymentMethodOptions.map((method) => {
 	                    const Icon = paymentMethodIcons[method.value] || CreditCard;
+	                    const isMpesa = method.value === "mpesa";
 	                    const isSelected = reservationPaymentMethod === method.value;
 	                    return (
 	                      <button
@@ -1883,7 +1885,11 @@ Thank you for booking with us!
 	                            : "border-gray-300 bg-white text-gray-700 hover:border-[#1A1A1A]"
 	                        }`}
 	                      >
-	                        <Icon size={16} />
+	                        {isMpesa ? (
+	                          <img src={mpesaIconSrc} alt="M-Pesa" className="h-4 w-4" />
+	                        ) : (
+	                          <Icon size={16} />
+	                        )}
 	                        <span>{method.label}</span>
 	                      </button>
 	                    );
@@ -1944,6 +1950,7 @@ Thank you for booking with us!
 	                  <div className="grid gap-2 sm:grid-cols-3">
 	                    {paymentMethodOptions.map((method) => {
 	                      const Icon = paymentMethodIcons[method.value] || CreditCard;
+	                      const isMpesa = method.value === "mpesa";
 	                      const isSelected = finalPaymentMethod === method.value;
 	                      return (
 	                        <button
@@ -1957,7 +1964,11 @@ Thank you for booking with us!
 	                              : "border-gray-300 bg-white text-gray-700 hover:border-[#1A1A1A]"
 	                          }`}
 	                        >
-	                          <Icon size={16} />
+	                          {isMpesa ? (
+	                            <img src={mpesaIconSrc} alt="M-Pesa" className="h-4 w-4" />
+	                          ) : (
+	                            <Icon size={16} />
+	                          )}
 	                          <span>{method.label}</span>
 	                        </button>
 	                      );
