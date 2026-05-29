@@ -141,6 +141,7 @@ export default function ServiceBookingForm({ serviceType, onBack }) {
   const mpesaPollingRef = useRef(null);
   const mpesaCountdownRef = useRef(null);
   const activeBookingRef = useRef(null);
+  const paymentProcessingRef = useRef({}); // Track ongoing payments per booking+stage to prevent concurrent attempts
   const [mpesaRetryAvailable, setMpesaRetryAvailable] = useState(false);
   const [mpesaPendingStage, setMpesaPendingStage] = useState(null);
   const [mpesaProcessing, setMpesaProcessing] = useState(false);
@@ -788,12 +789,27 @@ Thank you for booking with us!
     }
 
     const paymentStage = stage === "final" ? "final" : "reservation";
+    const paymentKey = `${activeBooking.id}_${paymentStage}`;
+
+    // Prevent concurrent payment attempts for same booking+stage
+    if (paymentProcessingRef.current[paymentKey]) {
+      setPaymentFeedback({
+        type: "error",
+        message: "Payment is already being processed. Please wait..."
+      });
+      return;
+    }
+
+    // Mark this payment as processing
+    paymentProcessingRef.current[paymentKey] = true;
+
     const amount =
       paymentStage === "final" ? activeBooking.finalPaymentAmount : activeBooking.reservationAmount;
     const selectedMethod =
       paymentStage === "final" ? finalPaymentMethod : reservationPaymentMethod;
 
     if (!amount || amount <= 0) {
+      delete paymentProcessingRef.current[paymentKey];
       setPaymentFeedback({
         type: "error",
         message: "Payment amount is missing for this booking."
@@ -802,11 +818,44 @@ Thank you for booking with us!
     }
 
     if (selectedMethod === "mpesa" && !phoneNumber) {
+      delete paymentProcessingRef.current[paymentKey];
       setPaymentFeedback({
         type: "error",
         message: "Add a valid phone number to complete M-Pesa payment."
       });
       return;
+    }
+
+    // Check if payment already exists for this booking+stage
+    try {
+      const { data: existingPayments, error: checkError } = await supabase
+        .from("payments")
+        .select("id, status, payment_stage")
+        .eq("booking_id", activeBooking.id)
+        .eq("payment_stage", paymentStage)
+        .in("status", ["pending", "completed", "reservation_paid", "paid"]);
+
+      if (existingPayments && existingPayments.length > 0) {
+        const existingPayment = existingPayments[0];
+        if (existingPayment.status === "completed" || existingPayment.status === "paid") {
+          delete paymentProcessingRef.current[paymentKey];
+          setPaymentFeedback({
+            type: "error",
+            message: `Payment already completed for ${paymentStage} stage. Status: ${existingPayment.status}`
+          });
+          return;
+        }
+        if (existingPayment.status === "pending") {
+          delete paymentProcessingRef.current[paymentKey];
+          setPaymentFeedback({
+            type: "error",
+            message: `A payment is already pending for ${paymentStage} stage. Please wait or contact support.`
+          });
+          return;
+        }
+      }
+    } catch (checkErr) {
+      console.warn("Could not check existing payments, proceeding anyway:", checkErr);
     }
 
     if (mpesaTimeoutRef.current) {
@@ -885,7 +934,8 @@ Thank you for booking with us!
           message: err.message
         });
       } finally {
-        setIsPaying(false);
+       delete paymentProcessingRef.current[paymentKey];
+       setIsPaying(false);
       }
       return;
     }
@@ -1033,7 +1083,8 @@ Thank you for booking with us!
         setMpesaProcessing(false);
         setMpesaModalVisible(false);
       } finally {
-        setIsPaying(false);
+       delete paymentProcessingRef.current[paymentKey];
+       setIsPaying(false);
       }
       return;
     }
@@ -1140,7 +1191,8 @@ Thank you for booking with us!
               message: `Payment completed but verification failed: ${verifyErr.message}. Deploy 'verify-payment' function and set PAYSTACK_SECRET_KEY in Supabase secrets, then retry verification.`
             });
           } finally {
-            setIsPaying(false);
+           delete paymentProcessingRef.current[paymentKey];
+           setIsPaying(false);
           }
         },
         onCancel: async () => {
@@ -1154,6 +1206,7 @@ Thank you for booking with us!
               .eq("reference", reference)
               .eq("user_id", user.id);
           } finally {
+            delete paymentProcessingRef.current[paymentKey];
             setPaymentFeedback({
               type: "error",
               message: "Payment was cancelled. Your booking remains unpaid."
@@ -1167,7 +1220,8 @@ Thank you for booking with us!
         type: "error",
         message: err.message
       });
-      setIsPaying(false);
+     delete paymentProcessingRef.current[paymentKey];
+     setIsPaying(false);
     }
   };
 
@@ -1601,7 +1655,7 @@ Thank you for booking with us!
                   </>
                 ) : (
                   <>
-                    {tripEstimate ? `Reserve · ${formatKesFromCents(tripEstimate.reservationFeeCents)}` : "Complete Booking"}
+                    Reserve/Book
                   </>
                 )}
               </button>
@@ -1936,56 +1990,64 @@ Thank you for booking with us!
 		            )}
 
 	            {/* Booking Action Buttons - Show after reservation */}
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:gap-3">
+	            <div className="mt-4 flex flex-col gap-3">
               <a
                 href="/bookings"
-                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(197,160,89,0.16)] text-sm"
+	                className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 shadow-[0_8px_16px_rgba(197,160,89,0.16)] text-sm"
               >
                 <CheckCircle size={16} />
                 View My Bookings
               </a>
 	              {!activeBooking?.quoteOnly && (
-	                <div className="flex-1 space-y-2">
-	                  <label className="text-xs font-semibold text-gray-500">Final payment method</label>
-	                  <div className="grid gap-2 sm:grid-cols-3">
-	                    {paymentMethodOptions.map((method) => {
-	                      const Icon = paymentMethodIcons[method.value] || CreditCard;
-	                      const isMpesa = method.value === "mpesa";
-	                      const isSelected = finalPaymentMethod === method.value;
-	                      return (
-	                        <button
-	                          key={`final-${method.value}`}
-	                          type="button"
-	                          onClick={() => setFinalPaymentMethod(method.value)}
-	                          aria-pressed={isSelected}
-	                          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
-	                            isSelected
-	                              ? "border-[#C5A059] bg-[#C5A059]/10 text-[#1A1A1A]"
-	                              : "border-gray-300 bg-white text-gray-700 hover:border-[#1A1A1A]"
-	                          }`}
-	                        >
-	                          {isMpesa ? (
-	                            <img src={mpesaIconSrc} alt="M-Pesa" className="h-4 w-4" />
-	                          ) : (
-	                            <Icon size={16} />
-	                          )}
-	                          <span>{method.label}</span>
-	                        </button>
-	                      );
-	                    })}
+	                <section className="bg-white rounded-xl border border-gray-200 p-5 sm:p-8 shadow-[0_10px_28px_rgba(15,23,42,0.05)]">
+	                  <h2 className="text-xl font-bold text-gray-900 mb-4">Complete Payment Now</h2>
+	                  <div className="space-y-2 mb-6">
+	                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">Select Payment Method</label>
+	                    <div className="grid gap-3 w-full">
+	                      {paymentMethodOptions
+	                        .filter(method => method.value !== "cash")
+	                        .map((method) => {
+	                          const Icon = paymentMethodIcons[method.value] || CreditCard;
+	                          const isMpesa = method.value === "mpesa";
+	                          const isSelected = finalPaymentMethod === method.value;
+	                          return (
+	                            <button
+	                              key={`final-${method.value}`}
+	                              type="button"
+	                              onClick={() => setFinalPaymentMethod(method.value)}
+	                              aria-pressed={isSelected}
+	                              className={`w-full flex items-center gap-3 rounded-lg border-2 px-4 py-3 text-sm font-semibold transition-all ${
+	                                isSelected
+	                                  ? "border-[#C5A059] bg-[#C5A059]/10 text-[#1A1A1A]"
+	                                  : "border-gray-200 bg-gray-50 text-gray-700 hover:border-[#C5A059] hover:bg-white"
+	                              }`}
+	                            >
+	                              {isMpesa ? (
+	                                <img src={mpesaIconSrc} alt="M-Pesa" className="h-5 w-5 flex-shrink-0" />
+	                              ) : (
+	                                <Icon size={20} className="flex-shrink-0" />
+	                              )}
+	                              <div className="flex-1 text-left">
+	                                <span>{method.label}</span>
+	                              </div>
+	                              {isSelected && <CheckCircle size={20} className="text-[#C5A059]" />}
+	                            </button>
+	                          );
+	                        })}
+	                    </div>
 	                  </div>
 	                  <button
 	                    type="button"
 	                    disabled={finalPaymentDisabled}
 	                    onClick={() => handleBookingPayment("final")}
-	                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 border border-[#C5A059] hover:border-[#1A1A1A] hover:bg-[#1A1A1A] text-[#C5A059] hover:text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+	                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3 bg-[#C5A059] hover:bg-[#1A1A1A] text-white font-semibold transition-all duration-300 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-[0_8px_16px_rgba(197,160,89,0.16)]"
 	                  >
-	                    {isPaying ? <Loader size={16} className="animate-spin" /> : <CreditCard size={16} />}
+	                    {isPaying ? <Loader size={18} className="animate-spin" /> : <CreditCard size={18} />}
 	                    {paymentStatusValue === "paid" ? "Payment Complete" : "Complete Payment"}
 	                  </button>
-	                </div>
+	                </section>
 	              )}
-            </div>
+	            </div>
 
             <div className="flex flex-col md:flex-row gap-3 mt-4">
               <button

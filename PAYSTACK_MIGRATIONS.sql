@@ -2,6 +2,23 @@
 -- Run this SQL in Supabase SQL Editor
 
 -- ============================================
+-- 0. CLEAN UP EXISTING DUPLICATES
+-- ============================================
+
+-- Find duplicate payments (multiple payments for same booking+stage)
+-- Run this query to see what duplicates exist:
+-- SELECT booking_id, payment_stage, COUNT(*) as count FROM payments 
+-- GROUP BY booking_id, payment_stage HAVING COUNT(*) > 1;
+
+-- DELETE duplicate payments, keeping only the MOST RECENT one per booking+stage
+DELETE FROM public.payments
+WHERE id NOT IN (
+  SELECT DISTINCT ON (booking_id, payment_stage) id
+  FROM public.payments
+  ORDER BY booking_id, payment_stage, created_at DESC
+);
+
+-- ============================================
 -- 1. CREATE PAYMENTS TABLE
 -- ============================================
 
@@ -11,6 +28,7 @@ CREATE TABLE IF NOT EXISTS public.payments (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   amount INTEGER NOT NULL,
   payment_method VARCHAR(50),
+  payment_stage VARCHAR(20) DEFAULT 'reservation',
   reference VARCHAR(100) UNIQUE NOT NULL,
   status VARCHAR(20) DEFAULT 'pending',
   paystack_response JSONB,
@@ -23,7 +41,18 @@ CREATE INDEX IF NOT EXISTS idx_payments_booking_id ON public.payments(booking_id
 CREATE INDEX IF NOT EXISTS idx_payments_user_id ON public.payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_reference ON public.payments(reference);
 CREATE INDEX IF NOT EXISTS idx_payments_status ON public.payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_stage ON public.payments(payment_stage);
 CREATE INDEX IF NOT EXISTS idx_payments_created_at ON public.payments(created_at);
+
+-- Add unique constraint to prevent duplicate payments for same booking+stage
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_booking_stage_unique 
+  ON public.payments(booking_id, payment_stage) 
+  WHERE status IN ('pending', 'completed');
+
+-- Add check constraint to ensure payment_stage is valid
+ALTER TABLE public.payments ADD CONSTRAINT check_payment_stage 
+  CHECK (payment_stage IN ('reservation', 'final')) 
+  NOT VALID;
 
 -- ============================================
 -- 2. UPDATE BOOKINGS TABLE
