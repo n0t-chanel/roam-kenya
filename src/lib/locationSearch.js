@@ -1,9 +1,14 @@
 /**
- * Unified Kenya location search using local data, OpenStreetMap, and Mapbox.
+ * Unified Kenya location search using multiple providers.
  *
- * The search returns one ranked list instead of treating providers as fallbacks:
- * local Kenya aliases give instant confidence, OpenStreetMap adds community POIs,
- * and Mapbox adds precise commercial geocoding with proximity bias.
+ * Providers (in priority order):
+ * 1. Local Kenya aliases (searchLocationAliases) - instant confidence, curated data
+ * 2. Mapbox Geocoding (searchMapboxGeocoding) - commercial geocoding, precise POIs
+ * 3. OpenStreetMap Nominatim (searchNominatim) - community-driven data
+ * 4. Mapbox via Paystack (searchKenyaLocations) - additional results and deduplication
+ *
+ * Results are merged into a single ranked list based on relevance, location type,
+ * text match score, proximity, and provider quality.
  */
 
 import { searchLocationAliases } from './kenyaLocations';
@@ -25,9 +30,9 @@ const CACHE_TTL = 5 * 60 * 1000;
 
 const SOURCE_WEIGHT = {
   local: 620,
-  mapbox: 390,
-  openstreetmap: 360,
-  nominatim: 360
+  mapbox: 410,
+  openstreetmap: 340,
+  nominatim: 340
 };
 
 const TYPE_WEIGHT = {
@@ -396,6 +401,111 @@ export async function searchNominatim(query, options = {}) {
   }
 }
 
+export async function searchMapboxGeocoding(query, options = {}) {
+  if (!query?.trim() || query.trim().length < 2) return [];
+
+  const { signal, limit = 10, proximity } = options;
+  const cleanQuery = query.trim();
+  const mapboxToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN;
+
+  if (!mapboxToken) {
+    console.warn('Mapbox token not configured');
+    return [];
+  }
+
+  try {
+    const proximityStr = proximity
+      ? `${proximity.longitude},${proximity.latitude}`
+      : `${DEFAULT_PROXIMITY.longitude},${DEFAULT_PROXIMITY.latitude}`;
+
+    const params = new URLSearchParams({
+      access_token: mapboxToken,
+      autocomplete: 'true',
+      bbox: `${KENYA_BOUNDS.west},${KENYA_BOUNDS.south},${KENYA_BOUNDS.east},${KENYA_BOUNDS.north}`,
+      country: 'ke',
+      language: 'en',
+      limit: String(limit),
+      proximity: proximityStr,
+      types: 'poi,address,place,locality,neighborhood,region',
+      fuzzyMatch: 'true'
+    });
+
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?${params.toString()}`;
+
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        'Accept-Language': 'en',
+        'User-Agent': 'RoamKenya/1.0 (booking-app)'
+      },
+      signal
+    });
+
+    if (!response.ok) {
+      console.warn('Mapbox search error:', response.status);
+      return [];
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data?.features)) {
+      return [];
+    }
+
+    // Normalize Mapbox results
+    return data.features
+      .filter(feature => {
+        if (!feature.center || feature.center.length < 2) return false;
+        const [lng, lat] = feature.center;
+        return isWithinKenya({ latitude: lat, longitude: lng });
+      })
+      .map(feature => {
+        const [longitude, latitude] = feature.center;
+        const placeType = Array.isArray(feature.place_type) ? feature.place_type[0] : '';
+
+        // Determine result type
+        let type = 'landmark';
+        if (placeType === 'poi' && feature.properties?.category) {
+          const category = feature.properties.category.toLowerCase();
+          if (category.includes('airport')) type = 'airport';
+          else if (category.includes('hotel') || category.includes('lodging')) type = 'hotel';
+          else if (category.includes('restaurant') || category.includes('food')) type = 'restaurant';
+          else if (category.includes('shopping') || category.includes('mall')) type = 'mall';
+          else if (category.includes('petrol') || category.includes('gas')) type = 'petrol';
+        } else if (placeType === 'address') {
+          type = 'address';
+        } else if (placeType === 'neighborhood' || placeType === 'quarter') {
+          type = 'neighborhood';
+        } else if (placeType === 'locality' || placeType === 'place' || placeType === 'region') {
+          type = 'city';
+        }
+
+        // Build display label
+        const relevantContext = [
+          feature.text,
+          feature.properties?.address,
+          feature.context?.find(ctx => ctx.id.startsWith('place.'))?.text,
+          'Kenya'
+        ].filter(Boolean);
+
+        return {
+          label: relevantContext.join(', '),
+          shortLabel: feature.text || feature.place_name,
+          latitude: Number.parseFloat(latitude),
+          longitude: Number.parseFloat(longitude),
+          type,
+          source: 'mapbox',
+          providerScore: Math.round((feature.relevance || 0.5) * 100)
+        };
+      });
+  } catch (error) {
+    if (error.name === 'AbortError' || signal?.aborted) {
+      throw error;
+    }
+    console.error('Mapbox search error:', error);
+    return [];
+  }
+}
+
 export async function reverseGeocodeNominatim({ latitude, longitude }, options = {}) {
   if (!latitude || !longitude) {
     throw new Error('Invalid coordinates provided.');
@@ -466,6 +576,7 @@ export async function searchLocationsUnified(query, options = {}) {
   if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
   const providerResults = await Promise.allSettled([
+    searchMapboxGeocoding(cleanQuery, { signal, limit: 10, proximity }),
     searchNominatim(cleanQuery, { signal, limit: 10 }),
     searchKenyaLocations(cleanQuery, { signal, proximity, limit: 10 })
   ]);
